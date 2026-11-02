@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: add-player-from-profile
+expected_outcome: |
+  Nico is added to data/roster.json with TopDeck ID tdNico07 (not the full URL), Urza as primary deck and Tivit as a second deck with canonical names, gauntlet_pilot true, and the reply lists the full roster.
+context:
+  scaffold_script: place-files.sh

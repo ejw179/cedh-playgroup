@@ -1,0 +1,69 @@
+{
+  "games": [
+    {
+      "date": "2026-10-25",
+      "seats": [
+        {
+          "player": "Eric",
+          "commander": "Kinnan, Bonder Prodigy"
+        },
+        {
+          "player": "Sam",
+          "commander": "Najeela, the Blade-Blossom"
+        },
+        {
+          "player": "Lee",
+          "commander": "Tymna the Weaver / Kraum, Ludevic's Opus"
+        },
+        {
+          "player": "Kim",
+          "commander": "Yuriko, the Tiger's Shadow"
+        }
+      ],
+      "winner": "Sam",
+      "note": ""
+    },
+    {
+      "date": "2026-10-25",
+      "seats": [
+        {
+          "player": "Eric",
+          "commander": "Kinnan, Bonder Prodigy"
+        },
+        {
+          "player": "Sam",
+          "commander": "Najeela, the Blade-Blossom"
+        },
+        {
+          "player": "Jo",
+          "commander": "Glarb, Calamity's Augur"
+        },
+        {
+          "player": "Kim",
+          "commander": "Yuriko, the Tiger's Shadow"
+        }
+      ],
+      "winner": "Sam",
+      "note": ""
+    },
+    {
+      "date": "2026-10-25",
+      "seats": [
+        {
+          "player": "Eric",
+          "commander": "Kinnan, Bonder Prodigy"
+        },
+        {
+          "player": "Sam",
+          "commander": "Najeela, the Blade-Blossom"
+        },
+        {
+          "player": "Ana",
+          "commander": "Sisay, Weatherlight Captain"
+        }
+      ],
+      "winner": null,
+      "note": ""
+    }
+  ]
+}

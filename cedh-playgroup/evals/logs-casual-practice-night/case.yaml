@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: logs-casual-practice-night
+expected_outcome: |
+  All three games are recorded in data/games.json with canonical TopDeck commander names, the correct winners (Sam, draw, Lee) and date 2026-11-01; the reply reads back what was logged and summarises updated practice records.
+context:
+  scaffold_script: place-files.sh

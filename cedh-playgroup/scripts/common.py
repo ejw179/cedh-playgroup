@@ -1,0 +1,169 @@
+"""Shared helpers: data folder, JSON load/save, commander name matching."""
+import json
+import os
+import re
+import sys
+import time
+import urllib.parse
+import urllib.request
+from datetime import date, datetime, timezone
+from pathlib import Path
+
+# Windows consoles default to cp1252; commander names and tables need UTF-8.
+for _s in (sys.stdin, sys.stdout, sys.stderr):
+    if hasattr(_s, "reconfigure"):
+        _s.reconfigure(encoding="utf-8")
+
+ATTRIBUTION ="Tournament data from TopDeck.gg (https://topdeck.gg)"
+
+DEFAULTS = {
+    "roster.json": {"players": [], "gauntlet_decks": []},
+    "games.json": {"games": []},
+    "notes.json": {"notes": []},
+    "availability.json": {"sessions": {}},
+    "cache/tournaments.json": {"tournaments": {}, "synced": []},
+}
+
+
+def data_dir() -> Path:
+    """Where the playgroup's files live. Override with CEDH_PLAYGROUP_DIR."""
+    d = Path(os.environ.get("CEDH_PLAYGROUP_DIR") or Path.home() / "cedh-playgroup")
+    (d / "cache").mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def secret(name: str) -> str:
+    """An env var, or on Windows the user's saved variable, so a fresh
+    `setx NAME value` works without restarting the app that launched us."""
+    val = os.environ.get(name, "").strip()
+    if val or sys.platform != "win32":
+        return val
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as k:
+            return str(winreg.QueryValueEx(k, name)[0]).strip()
+    except OSError:
+        return ""
+
+
+def load(name: str) -> dict:
+    p = data_dir() / name
+    if not p.exists():
+        return json.loads(json.dumps(DEFAULTS[name]))
+    with open(p, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save(name: str, obj: dict) -> None:
+    p = data_dir() / name
+    tmp = p.with_suffix(".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(obj, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, p)
+
+
+def today() -> str:
+    return date.today().isoformat()
+
+
+def now_unix() -> int:
+    return int(time.time())
+
+
+def fmt_date(unix: float) -> str:
+    return datetime.fromtimestamp(unix, tz=timezone.utc).date().isoformat()
+
+
+def topdeck_id(raw: str) -> str:
+    """Accept a bare ID, an @handle, or a profile link like https://topdeck.gg/profile/<id or %40handle>."""
+    raw = raw.strip().rstrip("/")
+    m = re.search(r"topdeck\.gg/(?:profile|player)/([^/?#]+)", raw)
+    return urllib.parse.unquote(m.group(1) if m else raw)
+
+
+def resolve_profile(raw: str) -> dict:
+    """Turn a profile link, @handle or ID into the player ID tournament standings use.
+
+    Handle links (topdeck.gg/profile/@name) don't contain the ID, but every
+    profile page carries it in <meta name="player-id">. Returns
+    {"id", "handle", "display_name", "resolved"}."""
+    key = topdeck_id(raw)
+    handle = key if key.startswith("@") else ""
+    url = "https://topdeck.gg/profile/" + urllib.parse.quote(key)
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 cedh-playgroup-skill"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            html = r.read().decode("utf-8", "replace")
+    except Exception as e:  # offline, or TopDeck down
+        print(f"  could not open {url} ({e}); storing '{key}' as given", file=sys.stderr)
+        return {"id": key, "handle": handle, "display_name": "", "resolved": False}
+    m = re.search(r'<meta name="player-id" content="([^"]+)"', html) or \
+        re.search(r'PROFILE_PLAYER_ID\s*=\s*"([^"]+)"', html)
+    t = re.search(r"<title>(.*?) - Profile", html)
+    if not m:
+        print(f"  no player ID found on {url}; storing '{key}' as given", file=sys.stderr)
+        return {"id": key, "handle": handle, "display_name": t.group(1) if t else "", "resolved": False}
+    return {"id": m.group(1), "handle": handle, "display_name": t.group(1) if t else "", "resolved": True}
+
+
+def norm(s: str) -> str:
+    return re.sub(r"[^a-z0-9/ ]", "", s.lower()).strip()
+
+
+def canonical_leader(a: str, b: str | None = None) -> str:
+    """TopDeck writes partner pairs alphabetically as 'A / B'."""
+    parts = [a] + ([b] if b else [])
+    if b is None and "/" in a:
+        parts = [p.strip() for p in a.split("/")]
+    parts = [p.strip() for p in parts if p and p.strip()]
+    return " / ".join(sorted(parts, key=str.lower))
+
+
+def known_leaders() -> list[str]:
+    cache = load("cache/tournaments.json")
+    seen = set()
+    for t in cache["tournaments"].values():
+        for s in t.get("standings", []):
+            if s.get("leader"):
+                seen.add(s["leader"])
+    roster = load("roster.json")
+    for p in roster["players"]:
+        for d in p.get("decks", []):
+            seen.add(d["commander"])
+    for d in roster.get("gauntlet_decks", []):
+        seen.add(d["commander"])
+    return sorted(seen)
+
+
+def match_commander(text: str) -> tuple[str, list[str]]:
+    """Resolve a typed commander name to TopDeck's spelling.
+
+    Returns (best, alternatives). If nothing matches, returns the input
+    canonicalised so new commanders can still be recorded."""
+    want = norm(canonical_leader(text))
+    leaders = known_leaders()
+    exact = [l for l in leaders if norm(l) == want]
+    if exact:
+        return exact[0], []
+    # every typed word (or partner half) must appear somewhere in the name
+    tokens = [t for t in re.split(r"[ /,]+", want) if len(t) > 2]
+    hits = [l for l in leaders if tokens and all(t in norm(l) for t in tokens)]
+    if len(hits) == 1:
+        return hits[0], []
+    if hits:
+        hits.sort(key=len)
+        return hits[0], hits[1:6]
+    return canonical_leader(text), []
+
+
+def find_player(roster: dict, name: str) -> dict | None:
+    n = name.strip().lower()
+    for p in roster["players"]:
+        if n in (p["name"].lower(), p.get("topdeck_id", "").lower(), p.get("topdeck_handle", "").lower()):
+            return p
+    return None
+
+
+def die(msg: str) -> None:
+    print(f"error: {msg}", file=sys.stderr)
+    sys.exit(1)

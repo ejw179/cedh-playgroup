@@ -1,0 +1,100 @@
+{
+  "players": [
+    {
+      "name": "Eric",
+      "topdeck_id": "tdEric01",
+      "decks": [
+        {
+          "commander": "Kinnan, Bonder Prodigy",
+          "primary": true
+        }
+      ],
+      "gauntlet_pilot": false,
+      "added": "2026-11-02"
+    },
+    {
+      "name": "Sam",
+      "topdeck_id": "tdSam02",
+      "decks": [
+        {
+          "commander": "Najeela, the Blade-Blossom",
+          "primary": true
+        },
+        {
+          "commander": "Tymna the Weaver / Kraum, Ludevic's Opus",
+          "primary": false
+        }
+      ],
+      "gauntlet_pilot": false,
+      "added": "2026-11-02"
+    },
+    {
+      "name": "Lee",
+      "topdeck_id": "tdLee03",
+      "decks": [
+        {
+          "commander": "Tymna the Weaver / Kraum, Ludevic's Opus",
+          "primary": true
+        }
+      ],
+      "gauntlet_pilot": true,
+      "added": "2026-11-02"
+    },
+    {
+      "name": "Kim",
+      "topdeck_id": "tdKim04",
+      "decks": [
+        {
+          "commander": "Yuriko, the Tiger's Shadow",
+          "primary": true
+        }
+      ],
+      "gauntlet_pilot": false,
+      "added": "2026-11-02"
+    },
+    {
+      "name": "Jo",
+      "topdeck_id": "tdJo05",
+      "decks": [
+        {
+          "commander": "Glarb, Calamity's Augur",
+          "primary": true
+        }
+      ],
+      "gauntlet_pilot": true,
+      "added": "2026-11-02"
+    },
+    {
+      "name": "Ana",
+      "topdeck_id": "",
+      "decks": [
+        {
+          "commander": "Sisay, Weatherlight Captain",
+          "primary": true
+        }
+      ],
+      "gauntlet_pilot": false,
+      "added": "2026-11-02"
+    },
+    {
+      "name": "Max",
+      "topdeck_id": "",
+      "decks": [
+        {
+          "commander": "Rograkh, Son of Rohgahh / Thrasios, Triton Hero",
+          "primary": true
+        }
+      ],
+      "gauntlet_pilot": false,
+      "added": "2026-11-02"
+    }
+  ],
+  "gauntlet_decks": [
+    {
+      "commander": "Magda, Brazen Outlaw"
+    },
+    {
+      "commander": "Tivit, Seller of Secrets"
+    }
+  ]
+}
