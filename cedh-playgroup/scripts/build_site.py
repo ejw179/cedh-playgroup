@@ -17,7 +17,7 @@ from pathlib import Path
 import pods as podmod
 from analyze import (Profiler, area_label, big_min, meta, player_report, practice_stats, short,
                      takeaways, tournaments)
-from common import ATTRIBUTION, load
+from common import ATTRIBUTION, data_dir, load
 
 REPO_URL = "https://github.com/ejw179/cedh-playgroup"
 e = html.escape
@@ -157,7 +157,22 @@ def report_form(day: str, pod: dict, results_url: str) -> str:
 
 # ---------- rendering ----------
 
-def render_pods(p: dict | None, games: list[dict], results_url: str) -> str:
+def load_ai() -> dict | None:
+    """Claude's notes from ai_notes.py, if they've been generated."""
+    path = data_dir() / "ai_notes.json"
+    try:
+        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def ai_block(title: str, body: str, ai: dict) -> str:
+    when = (ai.get("generated_at") or "")[:10]
+    return (f'<div class="ai"><div class="ai-head"><strong>{e(title)}</strong>'
+            f'<span class="muted small">Written by Claude from these stats · {e(when)}</span></div>{body}</div>')
+
+
+def render_pods(p: dict | None, games: list[dict], results_url: str, ai: dict | None = None) -> str:
     if not p:
         return ('<p class="empty">No session saved yet. Tell Claude who\'s playing '
                 '("everyone except Jeff on Saturday") and pods appear here.</p>')
@@ -188,7 +203,11 @@ def render_pods(p: dict | None, games: list[dict], results_url: str) -> str:
         results = ("".join(game_card(g) for g in done) if done else "")
         results_block = f'<div class="results"><h4>Results</h4>{results}</div>' if done else ""
         form = "" if p.get("draft") else report_form(p["date"], pod, results_url)
-        parts.append(f'<article class="card pod"><h3>Pod {pod["pod"]}</h3><ol class="seats">{"".join(cards)}</ol>'
+        brief = ""
+        if ai and ai.get("session") == p["date"]:
+            text = next((b["briefing"] for b in ai.get("pods", []) if b.get("pod") == pod["pod"]), "")
+            brief = ai_block("Briefing", f"<p>{e(text)}</p>", ai) if text else ""
+        parts.append(f'<article class="card pod"><h3>Pod {pod["pod"]}</h3>{brief}<ol class="seats">{"".join(cards)}</ol>'
                      f'{meta_line}{results_block}{form}</article>')
     if p["bench"]:
         parts.append(f'<p class="muted">Sitting out first game: {e(", ".join(p["bench"]))}. Rotate them in next.</p>')
@@ -207,7 +226,7 @@ def owners_by_commander(roster: dict) -> dict:
     return own
 
 
-def render_meta(views: list[dict], roster: dict) -> str:
+def render_meta(views: list[dict], roster: dict, ai: dict | None = None) -> str:
     own = owners_by_commander(roster)
     tabs, panels = [], []
     for i, v in enumerate(views):
@@ -229,18 +248,22 @@ def render_meta(views: list[dict], roster: dict) -> str:
         avg = sum(r["wins"] for r in m["commanders"].values()) / seats if seats else 0.25
         small = ('<p class="note">Small sample: read shares as who shows up, and win rates as hints.</p>'
                  if m["total_entries"] < 150 else "")
+        notes = (ai or {}).get("meta", {}).get(v["id"]) or []
+        analyst = (ai_block("Analyst notes", "<ul>" + "".join(f"<li>{e(n)}</li>" for n in notes) + "</ul>", ai)
+                   if notes else "")
         tabs.append(f'<button role="tab" aria-selected="{"true" if i == 0 else "false"}" data-tab="{v["id"]}">{e(v["label"])}</button>')
         panels.append(
             f'<div role="tabpanel" id="tab-{v["id"]}" {"" if i == 0 else "hidden"}>'
             f'<p class="muted">{e(v["desc"])}: {m["events"]} events, {m["total_entries"]} entries. '
-            f'Average seat wins {pct(avg)}, so read win rates against that, not 50%.</p>{small}'
+            f'Average seat wins {pct(avg)}, so read win rates against that, not 50%.</p>{small}{analyst}'
             f'<div class="scroll"><table><thead><tr><th>#</th><th>Commander <span class="muted">· who plays it here</span></th>'
             f'<th>Entries</th><th>Share</th><th>Δ</th><th>Win rate</th><th>Top cut</th></tr></thead>'
             f'<tbody>{"".join(trs) or "<tr><td colspan=7>No events in this window.</td></tr>"}</tbody></table></div></div>')
     return f'<div class="tabs" role="tablist">{"".join(tabs)}</div>{"".join(panels)}'
 
 
-def render_players(roster: dict, prof: Profiler, games: list[dict]) -> str:
+def render_players(roster: dict, prof: Profiler, games: list[dict], ai: dict | None = None) -> str:
+    coach = {c.get("name"): c for c in (ai or {}).get("players", [])}
     reports = {r["name"]: r for r in player_report([], 60)}
     cards = []
     for p in roster["players"]:
@@ -286,6 +309,9 @@ def render_players(roster: dict, prof: Profiler, games: list[dict]) -> str:
         cards.append(f'<article class="card player"><header><h3>{e(p["name"])}</h3>{link}</header>'
                      f'<p class="deck">{e(decks) or "No decks recorded"}</p><p class="muted small">{e(form)}</p>'
                      f'{practice}{take}'
+                     + (ai_block("Coach’s note", f'<p>{e(coach[p["name"]]["note"])}</p>'
+                                 f'<p class="next"><strong>Next:</strong> {e(coach[p["name"]]["next_step"])}</p>', ai)
+                        if p["name"] in coach else "") +
                      f'<div class="seatstrip">{"".join(seat_cells)}</div><div class="mu">{mu}</div></article>')
     return f'<div class="grid">{"".join(cards)}</div>'
 
@@ -396,6 +422,10 @@ border-radius:8px;padding:.45rem .55rem;width:100%}
 padding:.3rem .7rem;color:var(--ink);font-size:.9rem;cursor:pointer}.rf .chip input{width:auto}
 .rf button{font:inherit;font-weight:700;background:var(--accent);color:var(--accent-ink);border:0;border-radius:999px;
 padding:.55rem 1.1rem;cursor:pointer;justify-self:start}.rf button[disabled]{opacity:.6;cursor:default}
+.ai{border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:10px;padding:10px 12px;
+margin:.6rem 0;background:var(--surface)}.ai-head{display:flex;justify-content:space-between;gap:.5rem;flex-wrap:wrap}
+.ai ul{margin:.35rem 0 0;padding-left:1.1rem;font-size:.92rem}.ai li{margin:.2rem 0}.ai p{margin:.35rem 0 0;font-size:.92rem}
+.ai .next{color:var(--ink)}
 .rf-status{font-size:.9rem}.rf-status.ok{color:var(--good)}.rf-status.err{color:var(--bad)}
 """
 
@@ -449,11 +479,12 @@ def page(cfg: dict) -> str:
     roster = load("roster.json")
     games = load("games.json")["games"]
     prof = Profiler(30, 16)
+    ai = load_ai()
     day = next_session()
     sections = [
-        ("pods", "Next session", render_pods(build_pods(day, cfg), games, cfg.get("results_url", ""))),
-        ("meta", "Meta", render_meta(meta_views(cfg), roster)),
-        ("players", "Players", render_players(roster, prof, games)),
+        ("pods", "Next session", render_pods(build_pods(day, cfg), games, cfg.get("results_url", ""), ai)),
+        ("meta", "Meta", render_meta(meta_views(cfg), roster, ai)),
+        ("players", "Players", render_players(roster, prof, games, ai)),
         ("practice", "Practice", render_practice(games)),
     ]
     nav = "".join(f'<a href="#{sid}">{e(t)}</a>' for sid, t, _ in sections)

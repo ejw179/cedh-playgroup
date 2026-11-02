@@ -42,6 +42,27 @@ jobs:
             python sync.py --days 90
           fi
 
+      # Claude-written notes: reuse the last ones when the data hasn't changed
+      - run: pip install anthropic
+
+      - uses: actions/cache/restore@v4
+        with:
+          path: data/ai_notes.json
+          key: ai-notes-${{ github.run_id }}
+          restore-keys: ai-notes-
+
+      - name: Claude notes
+        working-directory: cedh-playgroup/scripts
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python ai_notes.py
+
+      - uses: actions/cache/save@v4
+        if: hashFiles('data/ai_notes.json') != ''
+        with:
+          path: data/ai_notes.json
+          key: ai-notes-${{ github.run_id }}
+
       - name: Build site
         working-directory: cedh-playgroup/scripts
         run: python build_site.py --out "$GITHUB_WORKSPACE/site"

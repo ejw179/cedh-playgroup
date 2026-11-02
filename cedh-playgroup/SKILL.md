@@ -383,6 +383,20 @@ cache and outbox are git-ignored. Remember the site is public: names, decks
 and records are visible to anyone with the link. Never put anything private
 in notes. To preview locally: `python scripts/build_site.py --out site`.
 
+### Claude's notes on the site
+
+`scripts/ai_notes.py` asks Claude (Opus 5.5) for short written analysis
+during each site build: analyst notes for each meta lens, a coach's note and
+next step for each player (tied to their takeaways), and a briefing for each
+saved pod. It sends only the numbers the site already shows. It skips the
+call when the data hasn't changed. If the key is missing or the call fails,
+the site builds without the notes. It runs in GitHub Actions with the
+`ANTHROPIC_API_KEY` repo secret and costs about $0.10 per regeneration. To
+look at notes without publishing, run the *Preview Claude notes* workflow and
+download its artifact. These notes are a second opinion on the same data: in
+chat, you still read the scripts' output yourself rather than quoting the
+site's notes.
+
 ## Things to get right
 
 - Players are identified by TopDeck ID, never by display name alone.
