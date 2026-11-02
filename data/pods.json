@@ -1,0 +1,262 @@
+{
+  "sessions": {
+    "2026-11-02": {
+      "field_seats": [
+        0.23281127808424745,
+        0.19375224568300467,
+        0.16439456386194068,
+        0.14264578445670323
+      ],
+      "seat_mode": "practice",
+      "pods": [
+        {
+          "pod": 1,
+          "seats": [
+            {
+              "seat": 1,
+              "player": "Alex",
+              "commander": "Tayam, Luminous Enigma",
+              "gauntlet": false,
+              "seat_record": "1/10",
+              "seat_expected": 0.233,
+              "seat_vs_field": -0.074,
+              "seat_read": "worst seat",
+              "matchups_here": [
+                {
+                  "opponent": "Darison",
+                  "commander": "Sisay, Weatherlight Captain",
+                  "gap": -0.087,
+                  "games": 7,
+                  "evidence": [
+                    "0/7 at tournament tables",
+                    "Tayam field-wide 18% over 72"
+                  ]
+                },
+                {
+                  "opponent": "Eric",
+                  "commander": "Kinnan, Bonder Prodigy",
+                  "gap": -0.031,
+                  "games": 7,
+                  "evidence": [
+                    "1/7 at tournament tables",
+                    "Tayam field-wide 18% over 113"
+                  ]
+                },
+                {
+                  "opponent": "Ryan",
+                  "commander": "Kraum, Ludevic's Opus / Tymna the Weaver",
+                  "gap": 0.039,
+                  "games": 7,
+                  "evidence": [
+                    "2/7 at tournament tables",
+                    "Tayam field-wide 20% over 121"
+                  ]
+                }
+              ],
+              "needs_practice_elsewhere": [
+                {
+                  "commander": "Magda, Brazen Outlaw",
+                  "gap": -0.048,
+                  "evidence": [
+                    "0/4 at tournament tables",
+                    "Tayam field-wide 21% over 33"
+                  ]
+                },
+                {
+                  "commander": "Rograkh, Son of Rohgahh / Thrasios, Triton Hero",
+                  "gap": -0.045,
+                  "evidence": [
+                    "1/8 at tournament tables",
+                    "Tayam field-wide 16% over 85"
+                  ]
+                }
+              ],
+              "evidence": {
+                "tournament_games": 35,
+                "practice_games": 0
+              },
+              "player_strength": 0.294,
+              "decklist": "",
+              "practice_rank": null,
+              "takeaway": null
+            },
+            {
+              "seat": 2,
+              "player": "Darison",
+              "commander": "Sisay, Weatherlight Captain",
+              "gauntlet": false,
+              "seat_record": "0/7",
+              "seat_expected": 0.194,
+              "seat_vs_field": -0.09,
+              "seat_read": "worst seat",
+              "matchups_here": [
+                {
+                  "opponent": "Eric",
+                  "commander": "Kinnan, Bonder Prodigy",
+                  "gap": 0.057,
+                  "games": 3,
+                  "evidence": [
+                    "1/3 at tournament tables",
+                    "Sisay field-wide 23% over 291"
+                  ]
+                },
+                {
+                  "opponent": "Alex",
+                  "commander": "Tayam, Luminous Enigma",
+                  "gap": 0.11,
+                  "games": 4,
+                  "evidence": [
+                    "2/4 at tournament tables",
+                    "Sisay field-wide 24% over 72"
+                  ]
+                },
+                {
+                  "opponent": "Ryan",
+                  "commander": "Kraum, Ludevic's Opus / Tymna the Weaver",
+                  "gap": 0.134,
+                  "games": 5,
+                  "evidence": [
+                    "3/5 at tournament tables",
+                    "Sisay field-wide 19% over 378"
+                  ]
+                }
+              ],
+              "needs_practice_elsewhere": [
+                {
+                  "commander": "Arcum Dagsson",
+                  "gap": -0.062,
+                  "evidence": [
+                    "0/3 at tournament tables",
+                    "Sisay field-wide 15% over 20"
+                  ]
+                }
+              ],
+              "evidence": {
+                "tournament_games": 25,
+                "practice_games": 0
+              },
+              "player_strength": 0.326,
+              "decklist": "",
+              "practice_rank": null,
+              "takeaway": null
+            },
+            {
+              "seat": 3,
+              "player": "Eric",
+              "commander": "Kinnan, Bonder Prodigy",
+              "gauntlet": false,
+              "seat_record": "0/2",
+              "seat_expected": 0.164,
+              "seat_vs_field": -0.033,
+              "seat_read": "not enough games in this seat yet",
+              "matchups_here": [
+                {
+                  "opponent": "Ryan",
+                  "commander": "Kraum, Ludevic's Opus / Tymna the Weaver",
+                  "gap": -0.027,
+                  "games": 1,
+                  "evidence": [
+                    "0/1 at tournament tables",
+                    "Kinnan field-wide 18% over 552"
+                  ]
+                },
+                {
+                  "opponent": "Alex",
+                  "commander": "Tayam, Luminous Enigma",
+                  "gap": -0.02,
+                  "games": 2,
+                  "evidence": [
+                    "0/2 at tournament tables",
+                    "Kinnan field-wide 21% over 113"
+                  ]
+                }
+              ],
+              "needs_practice_elsewhere": [],
+              "evidence": {
+                "tournament_games": 14,
+                "practice_games": 0
+              },
+              "player_strength": 0.222,
+              "decklist": "",
+              "practice_rank": null,
+              "takeaway": null
+            },
+            {
+              "seat": 4,
+              "player": "Ryan",
+              "commander": "Kraum, Ludevic's Opus / Tymna the Weaver",
+              "gauntlet": false,
+              "seat_record": "0/9",
+              "seat_expected": 0.143,
+              "seat_vs_field": -0.076,
+              "seat_read": "worst seat",
+              "matchups_here": [
+                {
+                  "opponent": "Alex",
+                  "commander": "Tayam, Luminous Enigma",
+                  "gap": -0.06,
+                  "games": 1,
+                  "evidence": [
+                    "0/1 at tournament tables",
+                    "Kraum field-wide 14% over 121"
+                  ]
+                },
+                {
+                  "opponent": "Eric",
+                  "commander": "Kinnan, Bonder Prodigy",
+                  "gap": -0.036,
+                  "games": 2,
+                  "evidence": [
+                    "0/2 at tournament tables",
+                    "Kraum field-wide 19% over 552"
+                  ]
+                },
+                {
+                  "opponent": "Darison",
+                  "commander": "Sisay, Weatherlight Captain",
+                  "gap": 0.05,
+                  "games": 3,
+                  "evidence": [
+                    "1/3 at tournament tables",
+                    "Kraum field-wide 22% over 378"
+                  ]
+                }
+              ],
+              "needs_practice_elsewhere": [
+                {
+                  "commander": "Rograkh, Son of Rohgahh / Silas Renn, Seeker Adept",
+                  "gap": -0.044,
+                  "evidence": [
+                    "0/4 at tournament tables",
+                    "Kraum field-wide 21% over 353"
+                  ]
+                }
+              ],
+              "evidence": {
+                "tournament_games": 27,
+                "practice_games": 0
+              },
+              "player_strength": 0.256,
+              "decklist": "",
+              "practice_rank": null,
+              "takeaway": null
+            }
+          ],
+          "strength": 0.252,
+          "meta_decks": [
+            "Kinnan, Bonder Prodigy (#6, 3.6% of meta)",
+            "Sisay, Weatherlight Captain (#3, 6.8% of meta)",
+            "Kraum, Ludevic's Opus / Tymna the Weaver (#1, 9.3% of meta)"
+          ],
+          "repeat_pairings": [],
+          "warnings": []
+        }
+      ],
+      "bench": [],
+      "attribution": "Tournament data from TopDeck.gg (https://topdeck.gg)",
+      "meta_label": "within 100 mi of 18201 (Hazleton, PA)",
+      "date": "2026-11-02",
+      "saved_at": "2026-11-02T18:45:43+00:00"
+    }
+  }
+}

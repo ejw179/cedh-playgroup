@@ -319,6 +319,52 @@ show it, and send on a second yes. If the user already said "and post it to
 Discord" in their request, one look at the preview is still required before
 sending.
 
+## Practice decks, takeaways, and closing a pod
+
+**Practice decks.** Each player can list 1–3 decks they want reps on, in
+priority order, with decklist links. Pods seat them on #1 unless it clashes:
+
+```bash
+python scripts/playgroup.py practice Eric --deck "Kinnan=https://moxfield.com/decks/..." --deck "Tymna Kraum"
+```
+
+**Takeaways are per pod, per player.** When a game is logged, each player's
+note (what they learned, what to work on) is stored on that game. The newest
+one is that player's current takeaway. It shows on their profile, in their
+seat on the next pods, and in `pods.py` output.
+
+```bash
+python scripts/playgroup.py log-game --date 2026-11-08 --pod 1 \
+    --seat "Alex=Tayam" --seat "Darison=Sisay" --seat "Eric=Kinnan" --seat "Ryan=Tymna Kraum" \
+    --winner Darison --note-for "Eric=Held Pact too long vs Sisay" --list-for "Darison=https://..."
+python scripts/playgroup.py takeaways            # everyone's latest
+```
+
+**Use takeaways to make pods actionable.** Before building pods, read
+`takeaways`. When a note names a deck or an archetype ("can't beat Sisay",
+"struggle vs stax", "need reps on turn-2 Kinnan"), steer the pods toward it:
+`--focus` that player, put the named deck at their table with `--deck` or a
+gauntlet pilot, or seat them on the practice deck the note is about. Then say
+so in the why ("Eric's at Darison's table because his last takeaway was about
+Sisay"). If a note is vague, don't invent a target.
+
+**Lock the seating, then close the pod on the site.** Once the group agrees
+on pods, save them so the site shows exactly that seating and offers the
+report form:
+
+```bash
+python scripts/pods.py --date 2026-11-08 --local --save
+```
+
+Each saved pod on the site has a **Report result** form: winner (or draw),
+each seat's deck and decklist (filled in from their profile) and a note per
+player, protected by the group PIN. Submissions go to the group's Google
+Apps Script (`apps-script/`). The *Import pod results* workflow runs every 30
+minutes, records them as games (turn order comes from the saved seating), and
+rebuilds the site. To import right away: `python scripts/import_results.py`
+(or run the workflow). Results reported to you in chat still go through
+`log-game` as before. Include `--pod` and `--note-for` when you have them.
+
 ## 6. The group website
 
 The group has a public site at https://ejw179.github.io/cedh-playgroup, built
@@ -330,8 +376,9 @@ and on every push that touches `data/` or the scripts.
 
 So **after you change group data** (log games, set a session, add players,
 change decks), the site doesn't update until `data/` is committed and pushed.
-Offer it: "Want me to push this so the site updates?" On yes, commit only
-`data/*.json` with a short message ("Log 11/2 practice games") and push. The
+Offer it: "Want me to push this so the site updates?" On yes, `git pull
+--rebase` first (the import bot commits results to `data/` too), then commit
+only `data/*.json` with a short message ("Log 11/2 practice games") and push. The
 cache and outbox are git-ignored. Remember the site is public: names, decks
 and records are visible to anyone with the link. Never put anything private
 in notes. To preview locally: `python scripts/build_site.py --out site`.

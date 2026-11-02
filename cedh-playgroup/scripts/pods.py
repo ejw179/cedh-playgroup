@@ -16,10 +16,11 @@ import json
 import math
 import random
 from collections import defaultdict
+from datetime import datetime, timezone
 
 from analyze import (BASELINE, Profiler, area_label, big_min, meta, practice_stats, resolve_area, short,
-                     tournaments)
-from common import ATTRIBUTION, die, find_player, load, match_commander
+                     takeaways, tournaments)
+from common import ATTRIBUTION, die, find_player, load, match_commander, save
 
 
 def pod_sizes(n: int) -> tuple[list[int], int]:
@@ -123,8 +124,14 @@ class Model:
             forced[p["name"]] = match_commander(c)[0]
         gauntlet = [d["commander"] for d in roster.get("gauntlet_decks", [])]
         self.options = {}
+        self.decklist = {}
         for p in self.players:
-            own = [d["commander"] for d in sorted(p.get("decks", []), key=lambda d: not d.get("primary"))]
+            # practice decks (the ones they asked for reps on) lead, in their priority order
+            practice = [d["commander"] for d in p.get("practice_decks", [])]
+            rest = [d["commander"] for d in sorted(p.get("decks", []), key=lambda d: not d.get("primary"))]
+            own = practice + [c for c in rest if c not in practice]
+            self.decklist[p["name"]] = {d["commander"]: d["list"] for d in p.get("decks", []) + p.get("practice_decks", [])
+                                        if d.get("list")}
             if p["name"] in forced:
                 opts = [(forced[p["name"]], "own")]
             else:
@@ -284,6 +291,7 @@ def parser():
     ap.add_argument("--iterations", type=int, default=400); ap.add_argument("--json", action="store_true")
     ap.add_argument("--seat-mode", choices=["practice", "best", "random"], default="practice",
                     help="practice: seat players where they're weakest; best: rehearse best seats")
+    ap.add_argument("--save", action="store_true", help="lock in this seating for --date (shown on the site)")
     return ap
 
 
@@ -292,6 +300,7 @@ def plan(a) -> tuple["Model", dict]:
     Used by main() and by build_site.py."""
     m = Model(a)
     pods, decks, notes, bench = m.solve()
+    games = load("games.json")["games"]
     rng = random.Random(a.seed)
     result = {"field_seats": m.prof.field_seats, "seat_mode": a.seat_mode, "pods": [], "bench": bench,
               "attribution": ATTRIBUTION}
@@ -323,7 +332,11 @@ def plan(a) -> tuple["Model", dict]:
                 "seat_vs_field": round(s["vs_field"], 3), "seat_read": seat_why,
                 "matchups_here": here, "needs_practice_elsewhere": [
                     {"commander": w["theirs"], "gap": round(w["gap"], 3), "evidence": w["evidence"]} for w in elsewhere[:2]],
-                "evidence": pf["evidence"], "player_strength": round(m.strength[n], 3)})
+                "evidence": pf["evidence"], "player_strength": round(m.strength[n], 3),
+                "decklist": m.decklist[n].get(decks[n][0], ""),
+                "practice_rank": next((r for r, d in enumerate(m.by_name[n].get("practice_decks", []), 1)
+                                       if d["commander"] == decks[n][0]), None),
+                "takeaway": (takeaways(games, n, 1) or [None])[0]})
         result["pods"].append({
             "pod": i, "seats": seats, "strength": round(pn["strength"], 3), "meta_decks": pn["meta"],
             "repeat_pairings": pn["repeats"], "warnings": pn["warnings"]})
@@ -331,9 +344,22 @@ def plan(a) -> tuple["Model", dict]:
     return m, result
 
 
+def save_pods(day: str, result: dict) -> None:
+    """Lock in a session's seating so the site (and nightly rebuilds) show
+    exactly what was posted, and results can be reported against it."""
+    saved = load("pods.json")
+    saved["sessions"][day] = {**result, "date": day, "saved_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+    save("pods.json", saved)
+
+
 def main():
     a = parser().parse_args()
     m, result = plan(a)
+    if a.save:
+        if not a.date:
+            die("--save needs --date (the session these pods are for)")
+        save_pods(a.date, result)
+        print(f"Saved pods for {a.date}; the site will show this seating.\n")
     if a.json:
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return
@@ -350,6 +376,11 @@ def main():
             print(f"  evidence: {ev['tournament_games']} tournament + {ev['practice_games']} practice games")
             print(f"  seat: {s['seat_read']} ({s['seat_record']} here, {s['seat_vs_field'] * 100:+.1f} pts vs "
                   f"seat average {s['seat_expected'] * 100:.1f}%)")
+            if s.get("practice_rank"):
+                print(f"  practice deck #{s['practice_rank']}" + (f" ({s['decklist']})" if s.get("decklist") else ""))
+            if s.get("takeaway"):
+                t = s["takeaway"]
+                print(f"  last takeaway ({t['date']}): {t['text']}")
             for h in s["matchups_here"]:
                 verb = "needs practice vs" if h["gap"] < 0 else "favoured vs"
                 print(f"  {verb} {h['opponent']}'s {short(h['commander'])}: {h['gap'] * 100:+.1f} pts "

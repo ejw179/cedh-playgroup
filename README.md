@@ -16,9 +16,13 @@ and posting to the group's Discord.
   - `pods.py`: build pods, set turn order, explain each seat
   - `discord.py`: preview, then send on approval, via channel webhook
   - `build_site.py`: the static website
-- `data/`: the group's data (roster, games, sessions, settings). Public: it feeds the site.
+  - `import_results.py`: pull results reported on the site into `data/games.json`
+- `data/`: the group's data (roster, practice decks, games and per-player notes, sessions, saved pods,
+  settings). Public: it feeds the site.
+- `apps-script/`: the Google Apps Script that receives "Report result" submissions (setup in its README)
 - `cedh-playgroup/evals/`: test cases (prompt, expected outcome, graders, synthetic data)
 - `.github/workflows/site.yml`: nightly sync, build, deploy to GitHub Pages
+- `.github/workflows/import.yml`: every 30 minutes, import reported results and rebuild if any arrived
 
 ## Setup
 

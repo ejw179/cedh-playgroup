@@ -277,6 +277,23 @@ class Profiler:
                 "evidence": {"tournament_games": tour, "practice_games": prac_n}}
 
 
+def takeaways(games: list[dict], name: str, last: int = 3) -> list[dict]:
+    """A player's most recent per-pod notes, newest first."""
+    out = []
+    for i, g in enumerate(games):  # log order breaks ties between same-day games
+        text = (g.get("notes") or {}).get(name)
+        if not text:
+            continue
+        seat = next((s for s in g["seats"] if s["player"] == name), None)
+        result = "draw" if g["winner"] is None else ("won" if g["winner"] == name else f"{g['winner']} won")
+        out.append({"date": g["date"], "pod": g.get("pod"), "text": text, "result": result,
+                    "commander": short(seat["commander"]) if seat else "?", "_i": i})
+    out.sort(key=lambda t: (t["date"], t["_i"]), reverse=True)
+    for t in out:
+        t.pop("_i")
+    return out[:last]
+
+
 def practice_stats(games: list[dict]) -> dict:
     """Per player from the group's logged games: record, by commander, versus commanders/players."""
     st = defaultdict(lambda: {"games": 0, "wins": 0, "draws": 0, "by_commander": Counter(),

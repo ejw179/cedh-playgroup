@@ -1,0 +1,49 @@
+name: Import pod results
+
+# Every 30 minutes: pull results submitted on the site (via the Apps Script
+# endpoint in data/config.json), record them in data/games.json, and if
+# anything changed, commit and rebuild the site.
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: import-results
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    env:
+      CEDH_PLAYGROUP_DIR: ${{ github.workspace }}/data
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Import new results
+        working-directory: cedh-playgroup/scripts
+        run: python import_results.py
+
+      - name: Commit and rebuild if anything changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- data; then
+            echo "No new results."
+            exit 0
+          fi
+          git config user.name "cedh-playgroup bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/games.json data/roster.json
+          git commit -m "Import pod results from the site"
+          git push
+          # pushes made with this token don't trigger other workflows, so start the site build directly
+          gh workflow run site.yml --ref main

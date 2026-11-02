@@ -5,8 +5,11 @@
   link NAME --topdeck ID_OR_LINK                # add/replace TopDeck profile for an existing player
   set-decks NAME --deck CMDR [--deck CMDR ...] [--primary CMDR] [--list URL]
   gauntlet-deck add|remove CMDR [--list URL]   # shared meta decks the group owns
-  log-game --date D --seat "Player=Commander" x3-5 --winner Player|draw [--note TEXT] [--no-order]
+  log-game --date D --seat "Player=Commander" x3-5 --winner Player|draw [--no-order]
+           [--pod N] [--note-for "Player=takeaway" ...] [--list-for "Player=URL" ...]
                                                 # seats in turn order (seat 1 first)
+  practice NAME --deck "CMDR=DECKLIST_URL" (1-3, priority order)   # decks they want reps on
+  takeaways [NAME] [--last 3]                   # latest per-pod notes
   home --zip 18201 [--miles 100] [--big-min 101] # --local area, and what counts as a --big event
   note TEXT [--author NAME] [--tag T ...]
   avail DATE [NAME ...] [--replace | --all] [--remove NAME ...]
@@ -21,8 +24,8 @@ from common import (die, find_player, load, match_commander, resolve_profile, sa
                     zip_location)
 
 
-def resolve_or_warn(text: str) -> str:
-    best, alts = match_commander(text)
+def resolve_or_warn(text: str, prefer: list[str] | None = None) -> str:
+    best, alts = match_commander(text, prefer)
     if alts:
         print(f"  '{text}' -> '{best}' (also matched: {', '.join(alts)})")
     elif best.lower() != text.lower():
@@ -100,6 +103,44 @@ def cmd_set_decks(a):
     print(f"{p['name']} decks: " + ", ".join(d["commander"] + (" (primary)" if d["primary"] else "") for d in p["decks"]))
 
 
+def cmd_practice(a):
+    """Set the 1-3 decks a player wants to practise piloting, in priority order,
+    each with an optional decklist link: --deck "Kinnan=https://moxfield.com/decks/..."."""
+    roster = load("roster.json")
+    p = find_player(roster, a.name)
+    if not p:
+        die(f"no player named {a.name}")
+    if not 1 <= len(a.deck) <= 3:
+        die("give 1 to 3 practice decks, most important first")
+    out = []
+    for raw in a.deck:
+        cmdr, _, url = (x.strip() for x in raw.partition("="))
+        c = resolve_or_warn(cmdr)
+        out.append({"commander": c, **({"list": url} if url else {})})
+        if not any(d["commander"] == c for d in p.setdefault("decks", [])):
+            p["decks"].append({"commander": c, "primary": not p["decks"]})
+        for d in p["decks"]:  # keep the decklist with the deck too
+            if d["commander"] == c and url:
+                d["list"] = url
+    p["practice_decks"] = out
+    save("roster.json", roster)
+    print(f"{p['name']} practice decks: " + "; ".join(
+        f"{i}. {d['commander']}" + (f" ({d['list']})" if d.get("list") else "") for i, d in enumerate(out, 1)))
+
+
+def cmd_takeaways(a):
+    """Latest per-pod notes for each player (or one player)."""
+    from analyze import takeaways
+    roster = load("roster.json")
+    games = load("games.json")["games"]
+    names = [find_player(roster, a.name)["name"]] if a.name else [p["name"] for p in roster["players"]]
+    for n in names:
+        ts = takeaways(games, n, a.last)
+        print(f"{n}: " + ("no takeaways yet" if not ts else ""))
+        for t in ts:
+            print(f"  {t['date']} pod {t.get('pod') or '-'} ({t['result']}, on {t['commander']}): {t['text']}")
+
+
 def cmd_gauntlet(a):
     roster = load("roster.json")
     c = resolve_or_warn(a.commander)
@@ -123,7 +164,8 @@ def cmd_log_game(a):
         p = find_player(roster, who)
         if not p:
             print(f"  note: {who} is not on the roster; logging as a guest")
-        seats.append({"player": p["name"] if p else who, "commander": resolve_or_warn(cmdr)})
+        mine = [d["commander"] for d in (p or {}).get("decks", []) + (p or {}).get("practice_decks", [])]
+        seats.append({"player": p["name"] if p else who, "commander": resolve_or_warn(cmdr, mine)})
     if not 3 <= len(seats) <= 5:
         die("a pod needs 3 to 5 seats")
     winner = None
@@ -132,9 +174,34 @@ def cmd_log_game(a):
         if a.winner.lower() not in names:
             die(f"winner {a.winner} is not seated in this game")
         winner = seats[names.index(a.winner.lower())]["player"]
+    def per_player(pairs, what):
+        out = {}
+        for raw in pairs or []:
+            who, _, val = (x.strip() for x in raw.partition("="))
+            match = next((s["player"] for s in seats if s["player"].lower() == who.lower()), None)
+            if not match:
+                die(f"{what} for {who}, who isn't seated in this game")
+            if val:
+                out[match] = val
+        return out
+
     games = load("games.json")
-    games["games"].append({"date": a.date or today(), "seats": seats, "winner": winner,
-                           "turn_order": not a.no_order, "note": a.note or ""})
+    if a.source and any(g.get("source") == a.source for g in games["games"]):
+        print(f"Already imported {a.source}; skipped.")
+        return
+    game = {"date": a.date or today(), "seats": seats, "winner": winner,
+            "turn_order": not a.no_order, "note": a.note or ""}
+    if a.pod:
+        game["pod"] = a.pod
+    notes = per_player(a.note_for, "--note-for")
+    lists = per_player(a.list_for, "--list-for")
+    if notes:
+        game["notes"] = notes  # each player's takeaway from this pod
+    if lists:
+        game["decklists"] = lists
+    if a.source:
+        game["source"] = a.source
+    games["games"].append(game)
     save("games.json", games)
     print(f"Logged game #{len(games['games'])} on {a.date or today()}"
           + (" (turn order unknown)" if a.no_order else " (seats in turn order)") + ": "
@@ -239,6 +306,16 @@ def main():
     p.add_argument("--winner", required=True); p.add_argument("--note")
     p.add_argument("--no-order", action="store_true",
                    help="seats were NOT given in turn order (game still counts for matchups, not seat stats)")
+    p.add_argument("--pod", type=int, help="which pod of the session this game was")
+    p.add_argument("--note-for", action="append", metavar="PLAYER=TEXT", help="a player's takeaway from this pod")
+    p.add_argument("--list-for", action="append", metavar="PLAYER=URL", help="the decklist a player used")
+    p.add_argument("--source", help="id of an imported web submission (skips duplicates)")
+
+    p = sp.add_parser("practice"); p.set_defaults(f=cmd_practice)
+    p.add_argument("name"); p.add_argument("--deck", action="append", required=True, metavar="CMDR[=URL]")
+
+    p = sp.add_parser("takeaways"); p.set_defaults(f=cmd_takeaways)
+    p.add_argument("name", nargs="?"); p.add_argument("--last", type=int, default=3)
 
     p = sp.add_parser("home"); p.set_defaults(f=cmd_home)
     p.add_argument("--zip"); p.add_argument("--miles", type=float)

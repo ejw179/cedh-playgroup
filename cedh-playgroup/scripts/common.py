@@ -25,6 +25,7 @@ DEFAULTS = {
     "availability.json": {"sessions": {}},
     "cache/tournaments.json": {"tournaments": {}, "synced": []},
     "config.json": {"home": None},
+    "pods.json": {"sessions": {}},
 }
 
 
@@ -156,41 +157,55 @@ def canonical_leader(a: str, b: str | None = None) -> str:
     return " / ".join(sorted(parts, key=str.lower))
 
 
-def known_leaders() -> list[str]:
-    cache = load("cache/tournaments.json")
-    seen = set()
-    for t in cache["tournaments"].values():
-        for s in t.get("standings", []):
-            if s.get("leader"):
-                seen.add(s["leader"])
-    roster = load("roster.json")
-    for p in roster["players"]:
-        for d in p.get("decks", []):
-            seen.add(d["commander"])
-    for d in roster.get("gauntlet_decks", []):
-        seen.add(d["commander"])
-    return sorted(seen)
+_LEADERS = None
 
 
-def match_commander(text: str) -> tuple[str, list[str]]:
+def known_leaders() -> dict[str, int]:
+    """Every commander we know, with how often it's been played (roster decks count high)."""
+    global _LEADERS
+    if _LEADERS is None:
+        counts: dict[str, int] = {}
+        cache = load("cache/tournaments.json")
+        for t in cache["tournaments"].values():
+            for s in t.get("standings", []):
+                if s.get("leader"):
+                    counts[s["leader"]] = counts.get(s["leader"], 0) + 1
+        roster = load("roster.json")
+        for p in roster["players"]:
+            for d in p.get("decks", []) + p.get("practice_decks", []):
+                counts[d["commander"]] = counts.get(d["commander"], 0) + 10_000
+        for d in roster.get("gauntlet_decks", []):
+            counts[d["commander"]] = counts.get(d["commander"], 0) + 10_000
+        _LEADERS = counts
+    return _LEADERS
+
+
+def match_commander(text: str, prefer: list[str] | None = None) -> tuple[str, list[str]]:
     """Resolve a typed commander name to TopDeck's spelling.
 
-    Returns (best, alternatives). If nothing matches, returns the input
-    canonicalised so new commanders can still be recorded."""
+    `prefer` (e.g. that player's own decks) is tried first. Among several
+    matches the most-played wins, so "sisay" means Sisay, Weatherlight
+    Captain, not Captain Sisay. Returns (best, alternatives); unknown names
+    come back canonicalised so new commanders can still be recorded."""
     want = norm(canonical_leader(text))
-    leaders = known_leaders()
-    exact = [l for l in leaders if norm(l) == want]
-    if exact:
-        return exact[0], []
-    # every typed word (or partner half) must appear somewhere in the name
     tokens = [t for t in re.split(r"[ /,]+", want) if len(t) > 2]
-    hits = [l for l in leaders if tokens and all(t in norm(l) for t in tokens)]
-    if len(hits) == 1:
-        return hits[0], []
-    if hits:
-        hits.sort(key=len)
-        return hits[0], hits[1:6]
-    return canonical_leader(text), []
+
+    def hits_in(names):
+        exact = [l for l in names if norm(l) == want]
+        if exact:
+            return exact
+        return [l for l in names if tokens and all(t in norm(l) for t in tokens)]
+
+    if prefer:
+        mine = hits_in(prefer)
+        if len(mine) == 1:
+            return mine[0], []
+    counts = known_leaders()
+    hits = hits_in(list(counts))
+    if not hits:
+        return canonical_leader(text), []
+    hits.sort(key=lambda l: (-counts[l], len(l)))
+    return hits[0], hits[1:6]
 
 
 def find_player(roster: dict, name: str) -> dict | None:

@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pods as podmod
 from analyze import (Profiler, area_label, big_min, meta, player_report, practice_stats, short,
-                     tournaments)
+                     takeaways, tournaments)
 from common import ATTRIBUTION, load
 
 REPO_URL = "https://github.com/ejw179/cedh-playgroup"
@@ -29,6 +29,11 @@ def pct(x, digits=1):
 
 def pts(x):
     return f"{x * 100:+.1f} pts"
+
+
+def deck_link(commander: str, url: str | None) -> str:
+    name = e(short(commander))
+    return f'<a href="{e(url)}" rel="noopener">{name}</a>' if url else name
 
 
 # ---------- data ----------
@@ -59,15 +64,18 @@ def next_session() -> str | None:
 
 
 def build_pods(day: str, cfg: dict) -> dict | None:
+    """The locked-in seating for that session if it was saved, else a draft."""
     if not day:
         return None
+    saved = load("pods.json")["sessions"].get(day)
+    if saved:
+        return {**saved, "draft": False}
     args = ["--date", day, "--json"] + (["--local"] if cfg.get("home") else [])
     try:
         _, result = podmod.plan(podmod.parser().parse_args(args))
     except SystemExit:  # e.g. fewer than 3 players saved for that day
         return None
-    result["date"] = day
-    return result
+    return {**result, "date": day, "draft": True}
 
 
 def seat_why(s: dict) -> list[str]:
@@ -93,37 +101,99 @@ def seat_why(s: dict) -> list[str]:
         out.append(f"Also weak vs {short(w['commander'])}, not at this table ({'; '.join(w['evidence'][:1])}).")
     if s["gauntlet"]:
         out.append("Piloting a shared gauntlet deck.")
+    if s.get("practice_rank"):
+        out.append(f"Their #{s['practice_rank']} practice deck.")
+    t = s.get("takeaway")
+    if t:
+        out.append(f"Working on (from {t['date']}): “{t['text']}”")
     return out
+
+
+def game_card(g: dict) -> str:
+    """One reported game: turn order, winner, decklists and each player's note."""
+    lists, notes = g.get("decklists", {}), g.get("notes", {})
+    rows = []
+    for i, s in enumerate(g["seats"], 1):
+        won = g["winner"] == s["player"]
+        deck = e(short(s["commander"]))
+        if lists.get(s["player"]):
+            deck = f'<a href="{e(lists[s["player"]])}" rel="noopener">{deck}</a>'
+        note = f'<div class="note-line">“{e(notes[s["player"]])}”</div>' if notes.get(s["player"]) else ""
+        rows.append(f'<li class="{"won" if won else ""}"><span class="seat-n sm">{i}</span><div>'
+                    f'<strong>{e(s["player"])}</strong> {deck}{" <span class=tag>winner</span>" if won else ""}{note}</div></li>')
+    head = "Draw" if g["winner"] is None else f'{e(g["winner"])} won'
+    by = f' · reported by {e(g["reported_by"])}' if g.get("reported_by") else ""
+    pod = f' · pod {g["pod"]}' if g.get("pod") else ""
+    return (f'<div class="game"><div class="game-head"><strong>{head}</strong>'
+            f'<span class="muted small">{e(g["date"])}{pod}{by}</span></div>'
+            f'<ol class="game-seats">{"".join(rows)}</ol></div>')
+
+
+def report_form(day: str, pod: dict, results_url: str) -> str:
+    """'Close the pod': winner, each seat's deck + decklist + note, group PIN."""
+    if not results_url:
+        return '<p class="muted small">Online reporting isn’t set up yet. Send results to Claude instead.</p>'
+    seats = "".join(
+        f'<fieldset class="rf-seat" data-player="{e(s["player"])}"><legend>Seat {s["seat"]}: {e(s["player"])}</legend>'
+        f'<label>Deck <input name="commander" value="{e(s["commander"])}" required></label>'
+        f'<label>Decklist link <input name="decklist" type="url" placeholder="https://moxfield.com/decks/…" '
+        f'value="{e(s.get("decklist") or "")}"></label>'
+        f'<label>Note / takeaway <textarea name="note" rows="2" maxlength="600" '
+        f'placeholder="What did you learn? What will you work on?"></textarea></label></fieldset>'
+        for s in pod["seats"])
+    winners = "".join(f'<label class="chip"><input type="radio" name="winner" value="{e(s["player"])}" required> '
+                      f'{e(s["player"])}</label>' for s in pod["seats"])
+    winners += '<label class="chip"><input type="radio" name="winner" value="draw"> Draw</label>'
+    return (f'<details class="report"><summary>Report result</summary>'
+            f'<form class="rf" data-date="{e(day)}" data-pod="{pod["pod"]}">'
+            f'<div class="rf-row"><span class="rf-label">Winner</span><div class="chips">{winners}</div></div>'
+            f'{seats}'
+            f'<div class="rf-row two"><label>Your name <input name="reporter" maxlength="60"></label>'
+            f'<label>Group PIN <input name="pin" type="password" autocomplete="off" required></label></div>'
+            f'<p class="muted small">Seats are already in turn order. Report each game separately.</p>'
+            f'<button type="submit">Submit result</button> <span class="rf-status" role="status"></span>'
+            f'</form></details>')
 
 
 # ---------- rendering ----------
 
-def render_pods(p: dict | None) -> str:
+def render_pods(p: dict | None, games: list[dict], results_url: str) -> str:
     if not p:
         return ('<p class="empty">No session saved yet. Tell Claude who\'s playing '
                 '("everyone except Jeff on Saturday") and pods appear here.</p>')
     dt = datetime.fromisoformat(p["date"])
     d = f"{dt:%a %b} {dt.day}"  # %-d isn't portable to Windows
     seats_avg = " · ".join(f"seat {i + 1}: {pct(f)}" for i, f in enumerate(p["field_seats"]))
+    draft = ('<p class="note">Draft seating, not locked in yet. It can change until Claude saves it '
+             '("save the pods").</p>' if p.get("draft") else "")
     parts = [f'<p class="lede">Session <strong>{e(d)}</strong>. Seat = turn order; each player sits where their '
-             f'record is weakest compared with what that seat normally wins ({e(seats_avg)}).</p>']
+             f'record is weakest compared with what that seat normally wins ({e(seats_avg)}).</p>{draft}']
     for pod in p["pods"]:
         cards = []
         for s in pod["seats"]:
-            why = "".join(f"<li>{e(w)}</li>" for w in seat_why(s))
+            # saved pods keep the seating; the takeaway shown is always the player's latest
+            live = (takeaways(games, s["player"], 1) or [s.get("takeaway")])[0]
+            why = "".join(f"<li>{e(w)}</li>" for w in seat_why({**s, "takeaway": live}))
             tag = '<span class="tag">gauntlet</span>' if s["gauntlet"] else ""
+            deck = e(short(s["commander"]))
+            if s.get("decklist"):
+                deck = f'<a href="{e(s["decklist"])}" rel="noopener">{deck}</a>'
             cards.append(f'<li class="seat"><div class="seat-n">{s["seat"]}</div><div class="seat-body">'
                          f'<div class="seat-head"><strong>{e(s["player"])}</strong> '
-                         f'<span class="deck">{e(short(s["commander"]))}</span>{tag}</div>'
+                         f'<span class="deck">{deck}</span>{tag}</div>'
                          f'<ul class="why">{why}</ul></div></li>')
         meta_line = (f'<p class="muted small">Meta decks at the table: '
                      f'{e("; ".join(m.split(" (")[0] for m in pod["meta_decks"]))}</p>' if pod["meta_decks"] else "")
+        done = [g for g in games if g["date"] == p["date"] and g.get("pod") == pod["pod"]]
+        results = ("".join(game_card(g) for g in done) if done else "")
+        results_block = f'<div class="results"><h4>Results</h4>{results}</div>' if done else ""
+        form = "" if p.get("draft") else report_form(p["date"], pod, results_url)
         parts.append(f'<article class="card pod"><h3>Pod {pod["pod"]}</h3><ol class="seats">{"".join(cards)}</ol>'
-                     f'{meta_line}</article>')
+                     f'{meta_line}{results_block}{form}</article>')
     if p["bench"]:
         parts.append(f'<p class="muted">Sitting out first game: {e(", ".join(p["bench"]))}. Rotate them in next.</p>')
-    parts.append('<p class="muted small">Report results in turn order so they count toward seat stats: '
-                 '<code>G1: Alex Tayam, Darison Sisay, Eric Kinnan, Ryan Tymna/Kraum. Winner Darison</code></p>')
+    parts.append('<p class="muted small">Results reported here show up within about 30 minutes, and each '
+                 'player’s note becomes their takeaway for the next pods.</p>')
     return "".join(parts)
 
 
@@ -170,7 +240,7 @@ def render_meta(views: list[dict], roster: dict) -> str:
     return f'<div class="tabs" role="tablist">{"".join(tabs)}</div>{"".join(panels)}'
 
 
-def render_players(roster: dict, prof: Profiler) -> str:
+def render_players(roster: dict, prof: Profiler, games: list[dict]) -> str:
     reports = {r["name"]: r for r in player_report([], 60)}
     cards = []
     for p in roster["players"]:
@@ -203,8 +273,19 @@ def render_players(roster: dict, prof: Profiler) -> str:
         mu = mlist(pf["weak"], "Needs practice vs", "weak") + mlist(pf["strong"], "Strong vs", "strong")
         if not mu:
             mu = '<p class="muted small">No matchup has 3+ games of evidence yet.</p>'
+        practice = ""
+        if p.get("practice_decks"):
+            items = "".join(f'<li>{deck_link(d["commander"], d.get("list"))}</li>' for d in p["practice_decks"])
+            practice = f'<div class="practice"><h4>Practising</h4><ol>{items}</ol></div>'
+        tks = takeaways(games, p["name"], 2)
+        take = ""
+        if tks:
+            take = '<div class="takeaways"><h4>Takeaways</h4>' + "".join(
+                f'<p class="small">“{e(t["text"])}” <span class="muted">{e(t["date"])}, on {e(t["commander"])}, '
+                f'{e(t["result"])}</span></p>' for t in tks) + "</div>"
         cards.append(f'<article class="card player"><header><h3>{e(p["name"])}</h3>{link}</header>'
                      f'<p class="deck">{e(decks) or "No decks recorded"}</p><p class="muted small">{e(form)}</p>'
+                     f'{practice}{take}'
                      f'<div class="seatstrip">{"".join(seat_cells)}</div><div class="mu">{mu}</div></article>')
     return f'<div class="grid">{"".join(cards)}</div>'
 
@@ -219,17 +300,19 @@ def render_practice(games: list[dict]) -> str:
                   f'<td class="num">{s["draws"]}</td><td class="num">{pct(s["wins"] / s["games"], 0)}</td>'
                   f'<td>{e(", ".join(f"{short(c)} {s["wins_by_commander"][c]}/{k}" for c, k in s["by_commander"].most_common(2)))}</td></tr>'
                   for n, s in rows)
-    recent = "".join(
-        f'<li><span class="muted">{e(g["date"])}</span> '
-        + " · ".join(f'{"<strong>" if g["winner"] == s["player"] else ""}{e(s["player"])} '
-                     f'<span class="muted">{e(short(s["commander"]))}</span>{"</strong>" if g["winner"] == s["player"] else ""}'
-                     for s in g["seats"])
-        + (" <span class=\"tag\">draw</span>" if g["winner"] is None else "") + "</li>"
-        for g in reversed(games[-12:]))
+    by_day = defaultdict(list)
+    for g in games:
+        by_day[g["date"]].append(g)
+    sessions = []
+    for day in sorted(by_day, reverse=True)[:6]:
+        cards = "".join(game_card(g) for g in sorted(by_day[day], key=lambda g: g.get("pod") or 0))
+        sessions.append(f'<details class="session" {"open" if not sessions else ""}><summary>{e(day)} '
+                        f'<span class="muted small">{len(by_day[day])} game{"s" if len(by_day[day]) != 1 else ""}</span>'
+                        f'</summary><div class="game-grid">{cards}</div></details>')
     return (f'<div class="scroll"><table><thead><tr><th>Player</th><th>Games</th><th>Wins</th><th>Draws</th>'
             f'<th>Win %</th><th>Decks</th></tr></thead><tbody>{trs}</tbody></table></div>'
-            f'<h3>Recent games</h3><ol class="games">{recent}</ol>'
-            '<p class="muted small">Players listed in turn order. Winner in bold. In 4-player games about 20–25% is average.</p>')
+            f'<p class="muted small">In 4-player games about 20–25% is average.</p>'
+            f'<h3>Pod results</h3>{"".join(sessions)}')
 
 
 CSS = """
@@ -291,6 +374,29 @@ td.share{display:flex;flex-direction:column}
 .mu .weak h4{color:var(--bad)}.mu .strong h4{color:var(--good)}.mu ul{margin:0;padding-left:1.1rem;font-size:.88rem}
 .games{padding-left:1.3rem;font-size:.9rem}.games li{margin:.25rem 0}
 footer{margin-top:28px;border-top:1px solid var(--line);padding:18px 0 40px;font-size:.85rem;color:var(--muted)}
+.player h4,.results h4{margin:.5rem 0 .15rem;font-size:.8rem;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
+.practice ol{margin:0;padding-left:1.2rem;font-size:.9rem}.takeaways p{margin:.15rem 0}
+.game{border:1px solid var(--line);border-radius:10px;padding:10px;margin:.5rem 0;background:var(--surface)}
+.game-head{display:flex;justify-content:space-between;gap:.5rem;flex-wrap:wrap;margin-bottom:.35rem}
+.game-seats{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.game-seats li{display:flex;gap:8px;align-items:flex-start;font-size:.9rem}
+.game-seats li.won strong{color:var(--good)}.note-line{color:var(--muted);font-size:.85rem}
+.seat-n.sm{width:20px;height:20px;font-size:.72rem;flex:none}
+.game-grid{display:grid;gap:10px}@media (min-width:760px){.game-grid{grid-template-columns:1fr 1fr}}
+.session{margin:.5rem 0}.session summary,.report summary{cursor:pointer;font-weight:600}
+.report{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+.rf{display:grid;gap:10px;margin-top:10px}.rf label{display:grid;gap:3px;font-size:.85rem;color:var(--muted)}
+.rf input,.rf textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);
+border-radius:8px;padding:.45rem .55rem;width:100%}
+.rf input:focus,.rf textarea:focus{outline:2px solid var(--accent);outline-offset:1px}
+.rf fieldset{border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:grid;gap:6px;margin:0}
+.rf legend{font-weight:600;padding:0 .3rem}.rf-row{display:grid;gap:6px}.rf-row.two{grid-template-columns:1fr 1fr}
+.rf-label{font-size:.85rem;color:var(--muted)}.chips{display:flex;flex-wrap:wrap;gap:6px}
+.rf .chip{display:inline-flex;align-items:center;gap:.35rem;border:1px solid var(--line);border-radius:999px;
+padding:.3rem .7rem;color:var(--ink);font-size:.9rem;cursor:pointer}.rf .chip input{width:auto}
+.rf button{font:inherit;font-weight:700;background:var(--accent);color:var(--accent-ink);border:0;border-radius:999px;
+padding:.55rem 1.1rem;cursor:pointer;justify-self:start}.rf button[disabled]{opacity:.6;cursor:default}
+.rf-status{font-size:.9rem}.rf-status.ok{color:var(--good)}.rf-status.err{color:var(--bad)}
 """
 
 JS = """
@@ -299,6 +405,41 @@ document.querySelectorAll('.tabs').forEach(function(bar){
     var b=ev.target.closest('button[data-tab]'); if(!b) return;
     bar.querySelectorAll('button').forEach(function(x){x.setAttribute('aria-selected',x===b?'true':'false')});
     document.querySelectorAll('[role=tabpanel]').forEach(function(p){p.hidden=p.id!=='tab-'+b.dataset.tab});
+  });
+});
+
+// "Report result": post one game to the group's Apps Script endpoint.
+var RESULTS_URL = document.body.dataset.resultsUrl;
+function store(k, v){ try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
+document.querySelectorAll('form.rf').forEach(function(f){
+  var pin = f.querySelector('[name=pin]'), who = f.querySelector('[name=reporter]');
+  pin.value = store('cedh-pin') || ''; who.value = store('cedh-reporter') || '';
+  f.addEventListener('submit', function(ev){
+    ev.preventDefault();
+    var status = f.querySelector('.rf-status'), btn = f.querySelector('button');
+    var winner = f.querySelector('[name=winner]:checked');
+    if (!winner) { status.className = 'rf-status err'; status.textContent = 'Pick the winner (or Draw).'; return; }
+    var seats = Array.prototype.map.call(f.querySelectorAll('.rf-seat'), function(fs, i){
+      return { seat: i + 1, player: fs.dataset.player,
+               commander: fs.querySelector('[name=commander]').value.trim(),
+               decklist: fs.querySelector('[name=decklist]').value.trim(),
+               note: fs.querySelector('[name=note]').value.trim() };
+    });
+    var body = { date: f.dataset.date, pod: Number(f.dataset.pod), winner: winner.value, seats: seats,
+                 reporter: who.value.trim(), pin: pin.value.trim() };
+    btn.disabled = true; status.className = 'rf-status'; status.textContent = 'Sending…';
+    fetch(RESULTS_URL, { method: 'POST', body: JSON.stringify(body) })
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if (!res.ok) throw new Error(res.error || 'Not saved.');
+        store('cedh-pin', body.pin); store('cedh-reporter', body.reporter);
+        status.className = 'rf-status ok';
+        status.textContent = 'Saved. It will appear here within about 30 minutes. Report the next game the same way.';
+        f.querySelectorAll('[name=note]').forEach(function(t){ t.value = ''; });
+        f.querySelectorAll('[name=winner]').forEach(function(r){ r.checked = false; });
+      })
+      .catch(function(err){ status.className = 'rf-status err'; status.textContent = 'Not saved: ' + err.message; })
+      .then(function(){ btn.disabled = false; });
   });
 });
 """
@@ -310,9 +451,9 @@ def page(cfg: dict) -> str:
     prof = Profiler(30, 16)
     day = next_session()
     sections = [
-        ("pods", "Next session", render_pods(build_pods(day, cfg))),
+        ("pods", "Next session", render_pods(build_pods(day, cfg), games, cfg.get("results_url", ""))),
         ("meta", "Meta", render_meta(meta_views(cfg), roster)),
-        ("players", "Players", render_players(roster, prof)),
+        ("players", "Players", render_players(roster, prof, games)),
         ("practice", "Practice", render_practice(games)),
     ]
     nav = "".join(f'<a href="#{sid}">{e(t)}</a>' for sid, t, _ in sections)
@@ -324,7 +465,7 @@ def page(cfg: dict) -> str:
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>cEDH Playgroup</title><meta name="description" content="Practice pods, local and big-event meta, and player profiles for our cEDH playgroup.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%236b3fd1'/%3E%3Ctext x='16' y='22' font-size='16' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='700'%3EC%3C/text%3E%3C/svg%3E">
-<style>{CSS}</style></head><body>
+<style>{CSS}</style></head><body data-results-url="{e(cfg.get('results_url', ''))}">
 <header class="top"><div class="wrap"><h1>cEDH Playgroup</h1><span class="muted small">{e(sub)}</span></div></header>
 <nav><div class="wrap">{nav}</div></nav>
 <main>{body}</main>
