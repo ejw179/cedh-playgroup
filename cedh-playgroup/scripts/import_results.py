@@ -76,6 +76,7 @@ def to_game(sub: dict, roster: dict) -> tuple[dict | None, str]:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--file", help="JSON from the endpoint, instead of fetching")
+    ap.add_argument("--ignore", nargs="+", metavar="ID", help="never import these submission ids (tests, mistakes)")
     a = ap.parse_args()
     if a.file:
         with open(a.file, encoding="utf-8") as f:
@@ -90,6 +91,13 @@ def main():
     roster = load("roster.json")
     games = load("games.json")
     seen = {g.get("source") for g in games["games"] if g.get("source")}
+    # test or mistaken submissions: `import_results.py --ignore ID` (kept in config.json)
+    cfg = load("config.json")
+    if a.ignore:
+        cfg["ignore_submissions"] = sorted(set(cfg.get("ignore_submissions", [])) | set(a.ignore))
+        save("config.json", cfg)
+        print(f"Ignoring {len(a.ignore)} submission(s) from now on.")
+    seen |= set(cfg.get("ignore_submissions", []))
     added, skipped = 0, []
     for sub in sorted(subs, key=lambda s: s.get("received", "")):
         if sub.get("id") in seen:

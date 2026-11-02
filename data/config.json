@@ -7,5 +7,9 @@
     "miles": 100.0
   },
   "big_min_players": 101,
-  "results_url": "https://script.google.com/macros/s/AKfycbyd9P4yfRyoe_rnZDpB8fLWOEVsGa50VNPwHPFm63pIlyTNEjVkc8Wgvm7KbRoZpFUt/exec"
+  "results_url": "https://script.google.com/macros/s/AKfycbyd9P4yfRyoe_rnZDpB8fLWOEVsGa50VNPwHPFm63pIlyTNEjVkc8Wgvm7KbRoZpFUt/exec",
+  "ignore_submissions": [
+    "b52eeb2b-2615-473d-94c4-5291d33c2fe9",
+    "d30c5502-755e-4d65-90f2-9687839f4956"
+  ]
 }
