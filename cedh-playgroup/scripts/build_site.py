@@ -1,0 +1,351 @@
+"""Build the group's static website from the same data the skill uses.
+
+  python build_site.py --out ../../site
+
+Writes one self-contained index.html (no external assets): next session's
+pods with a per-player "why", the meta through three lenses (local, big
+events, global), player profiles, and practice standings. The nightly
+GitHub Action runs sync.py then this, and publishes the folder to Pages.
+"""
+import argparse
+import html
+import json
+from collections import defaultdict
+from datetime import date, datetime, timezone
+from pathlib import Path
+
+import pods as podmod
+from analyze import (Profiler, area_label, big_min, meta, player_report, practice_stats, short,
+                     tournaments)
+from common import ATTRIBUTION, load
+
+REPO_URL = "https://github.com/ejw179/cedh-playgroup"
+e = html.escape
+
+
+def pct(x, digits=1):
+    return "–" if x is None else f"{x * 100:.{digits}f}%"
+
+
+def pts(x):
+    return f"{x * 100:+.1f} pts"
+
+
+# ---------- data ----------
+
+def meta_views(cfg: dict) -> list[dict]:
+    """The three lenses: local (home radius, all sizes, 30d), big (101+, 90d), global (16+, 30d)."""
+    views = []
+    home = cfg.get("home")
+    if home:
+        views.append({"id": "local", "label": "Local", "desc": f"Events {area_label(home)}, every size, last 30 days",
+                      "days": 30, "min": 0, "area": home})
+    big = big_min()
+    views.append({"id": "big", "label": "Big events", "desc": f"Events with {big}+ players, anywhere, last 90 days",
+                  "days": 90, "min": big, "area": None})
+    views.append({"id": "global", "label": "Global", "desc": "All TopDeck events with 16+ players, last 30 days",
+                  "days": 30, "min": 16, "area": None})
+    for v in views:
+        v["now"] = meta(tournaments(v["days"], v["min"], area=v["area"]))
+        v["prev"] = meta(tournaments(v["days"], v["min"], offset_days=v["days"], area=v["area"]))
+    return views
+
+
+def next_session() -> str | None:
+    """The earliest saved session from today on, else the most recent one."""
+    sessions = sorted(load("availability.json")["sessions"])
+    upcoming = [d for d in sessions if d >= date.today().isoformat()]
+    return upcoming[0] if upcoming else (sessions[-1] if sessions else None)
+
+
+def build_pods(day: str, cfg: dict) -> dict | None:
+    if not day:
+        return None
+    args = ["--date", day, "--json"] + (["--local"] if cfg.get("home") else [])
+    try:
+        _, result = podmod.plan(podmod.parser().parse_args(args))
+    except SystemExit:  # e.g. fewer than 3 players saved for that day
+        return None
+    result["date"] = day
+    return result
+
+
+def seat_why(s: dict) -> list[str]:
+    """Plain-English reasons for one seat, built from the pod builder's evidence."""
+    out = []
+    ev = s["evidence"]
+    if not ev["tournament_games"] and not ev["practice_games"]:
+        return ["No TopDeck or practice data yet. Practice reports will fill this in."]
+    rec, vs = s["seat_record"], s["seat_vs_field"]
+    if s["seat_read"] == "worst seat":
+        out.append(f"Seat {s['seat']} is their worst seat ({rec}, {pts(vs)} vs what seat {s['seat']} usually wins), "
+                   "so they practise it here.")
+    elif s["seat_read"] == "best seat":
+        out.append(f"Seat {s['seat']} is their best seat ({rec}).")
+    elif s["seat_read"] == "no strong read":
+        out.append(f"No strong read in seat {s['seat']} yet ({rec}).")
+    else:
+        out.append(f"First tracked games in seat {s['seat']}.")
+    for h in s["matchups_here"][:3]:
+        verb = "Needs reps vs" if h["gap"] < 0 else "Favoured vs"
+        out.append(f"{verb} {h['opponent']}'s {short(h['commander'])} ({'; '.join(h['evidence'][:2])}).")
+    for w in s["needs_practice_elsewhere"][:1]:
+        out.append(f"Also weak vs {short(w['commander'])}, not at this table ({'; '.join(w['evidence'][:1])}).")
+    if s["gauntlet"]:
+        out.append("Piloting a shared gauntlet deck.")
+    return out
+
+
+# ---------- rendering ----------
+
+def render_pods(p: dict | None) -> str:
+    if not p:
+        return ('<p class="empty">No session saved yet. Tell Claude who\'s playing '
+                '("everyone except Jeff on Saturday") and pods appear here.</p>')
+    dt = datetime.fromisoformat(p["date"])
+    d = f"{dt:%a %b} {dt.day}"  # %-d isn't portable to Windows
+    seats_avg = " · ".join(f"seat {i + 1}: {pct(f)}" for i, f in enumerate(p["field_seats"]))
+    parts = [f'<p class="lede">Session <strong>{e(d)}</strong>. Seat = turn order; each player sits where their '
+             f'record is weakest compared with what that seat normally wins ({e(seats_avg)}).</p>']
+    for pod in p["pods"]:
+        cards = []
+        for s in pod["seats"]:
+            why = "".join(f"<li>{e(w)}</li>" for w in seat_why(s))
+            tag = '<span class="tag">gauntlet</span>' if s["gauntlet"] else ""
+            cards.append(f'<li class="seat"><div class="seat-n">{s["seat"]}</div><div class="seat-body">'
+                         f'<div class="seat-head"><strong>{e(s["player"])}</strong> '
+                         f'<span class="deck">{e(short(s["commander"]))}</span>{tag}</div>'
+                         f'<ul class="why">{why}</ul></div></li>')
+        meta_line = (f'<p class="muted small">Meta decks at the table: '
+                     f'{e("; ".join(m.split(" (")[0] for m in pod["meta_decks"]))}</p>' if pod["meta_decks"] else "")
+        parts.append(f'<article class="card pod"><h3>Pod {pod["pod"]}</h3><ol class="seats">{"".join(cards)}</ol>'
+                     f'{meta_line}</article>')
+    if p["bench"]:
+        parts.append(f'<p class="muted">Sitting out first game: {e(", ".join(p["bench"]))}. Rotate them in next.</p>')
+    parts.append('<p class="muted small">Report results in turn order so they count toward seat stats: '
+                 '<code>G1: Alex Tayam, Darison Sisay, Eric Kinnan, Ryan Tymna/Kraum. Winner Darison</code></p>')
+    return "".join(parts)
+
+
+def owners_by_commander(roster: dict) -> dict:
+    own = defaultdict(list)
+    for p in roster["players"]:
+        for d in p.get("decks", []):
+            own[d["commander"]].append(p["name"])
+    for d in roster.get("gauntlet_decks", []):
+        own[d["commander"]].append("gauntlet")
+    return own
+
+
+def render_meta(views: list[dict], roster: dict) -> str:
+    own = owners_by_commander(roster)
+    tabs, panels = [], []
+    for i, v in enumerate(views):
+        m, prev = v["now"], v["prev"]
+        rows = sorted(m["commanders"].items(), key=lambda kv: -kv[1]["entries"])[:20]
+        top_share = rows[0][1]["share"] if rows else 1
+        trs = []
+        for n, (c, r) in enumerate(rows, 1):
+            ps = prev["commanders"].get(c, {}).get("share") if prev["total_entries"] else None
+            delta = "" if ps is None else f'<span class="{"up" if r["share"] > ps else "down" if r["share"] < ps else ""}">{(r["share"] - ps) * 100:+.1f}</span>'
+            bar = f'<span class="bar" style="width:{r["share"] / top_share * 100:.0f}%"></span>'
+            who = ", ".join(own.get(c, []))
+            trs.append(f'<tr><td class="num">{n}</td><td><span class="cmdr">{e(short(c))}</span>'
+                       f'{f"<span class=owner>{e(who)}</span>" if who else ""}</td>'
+                       f'<td class="num">{r["entries"]}</td><td class="share">{bar}<span>{pct(r["share"])}</span></td>'
+                       f'<td class="num">{delta}</td><td class="num">{pct(r["win_rate"])}</td>'
+                       f'<td class="num">{pct(r["conversion"], 0)}</td></tr>')
+        seats = sum(r["wins"] + r["draws"] + r["losses"] for r in m["commanders"].values())
+        avg = sum(r["wins"] for r in m["commanders"].values()) / seats if seats else 0.25
+        small = ('<p class="note">Small sample: read shares as who shows up, and win rates as hints.</p>'
+                 if m["total_entries"] < 150 else "")
+        tabs.append(f'<button role="tab" aria-selected="{"true" if i == 0 else "false"}" data-tab="{v["id"]}">{e(v["label"])}</button>')
+        panels.append(
+            f'<div role="tabpanel" id="tab-{v["id"]}" {"" if i == 0 else "hidden"}>'
+            f'<p class="muted">{e(v["desc"])}: {m["events"]} events, {m["total_entries"]} entries. '
+            f'Average seat wins {pct(avg)}, so read win rates against that, not 50%.</p>{small}'
+            f'<div class="scroll"><table><thead><tr><th>#</th><th>Commander <span class="muted">· who plays it here</span></th>'
+            f'<th>Entries</th><th>Share</th><th>Δ</th><th>Win rate</th><th>Top cut</th></tr></thead>'
+            f'<tbody>{"".join(trs) or "<tr><td colspan=7>No events in this window.</td></tr>"}</tbody></table></div></div>')
+    return f'<div class="tabs" role="tablist">{"".join(tabs)}</div>{"".join(panels)}'
+
+
+def render_players(roster: dict, prof: Profiler) -> str:
+    reports = {r["name"]: r for r in player_report([], 60)}
+    cards = []
+    for p in roster["players"]:
+        pf = prof.profile(p)
+        rep = reports.get(p["name"], {})
+        t = rep.get("tournament", {})
+        link = (f'<a href="https://topdeck.gg/profile/{e(p["topdeck_id"])}">{e(p.get("topdeck_name") or "TopDeck")}</a>'
+                if p.get("topdeck_id") else '<span class="muted">no TopDeck link</span>')
+        decks = ", ".join(short(d["commander"]) + (" (main)" if d.get("primary") else "") for d in p.get("decks", []))
+        form = (f'{t["events"]} events · {t["wins"]}-{t["losses"]}-{t["draws"]} · {pct(t["win_rate"])} · '
+                f'{t["top_cuts"]} top cut{"s" if t["top_cuts"] != 1 else ""}') if t.get("events") else "No tracked events in 60 days"
+        seat_cells = []
+        for s in pf["seats"]:
+            cls = ""
+            if s["seat"] == pf["best_seat"]:
+                cls = "best"
+            elif s["seat"] == pf["worst_seat"]:
+                cls = "worst"
+            rec = f'{s["wins"]}/{s["games"]}' if s["games"] else "–"
+            seat_cells.append(f'<div class="cell {cls}" title="seat {s["seat"]}: {pts(s["vs_field"])} vs seat average">'
+                              f'<span class="k">Seat {s["seat"]}</span><span class="v">{rec}</span></div>')
+
+        def mlist(rows, label, cls):
+            if not rows:
+                return ""
+            items = "".join(f'<li>{e(short(r["theirs"]))} <span class="muted">({e("; ".join(r["evidence"][:1]))})</span></li>'
+                            for r in rows[:3])
+            return f'<div class="{cls}"><h4>{label}</h4><ul>{items}</ul></div>'
+
+        mu = mlist(pf["weak"], "Needs practice vs", "weak") + mlist(pf["strong"], "Strong vs", "strong")
+        if not mu:
+            mu = '<p class="muted small">No matchup has 3+ games of evidence yet.</p>'
+        cards.append(f'<article class="card player"><header><h3>{e(p["name"])}</h3>{link}</header>'
+                     f'<p class="deck">{e(decks) or "No decks recorded"}</p><p class="muted small">{e(form)}</p>'
+                     f'<div class="seatstrip">{"".join(seat_cells)}</div><div class="mu">{mu}</div></article>')
+    return f'<div class="grid">{"".join(cards)}</div>'
+
+
+def render_practice(games: list[dict]) -> str:
+    if not games:
+        return ('<p class="empty">No practice games logged yet. Send results to Claude in turn order, '
+                'e.g. <code>G1: Alex Tayam, Darison Sisay, Eric Kinnan, Ryan Tymna/Kraum. Winner Darison</code>.</p>')
+    st = practice_stats(games)
+    rows = sorted(st.items(), key=lambda kv: (-(kv[1]["wins"] / kv[1]["games"]), -kv[1]["games"]))
+    trs = "".join(f'<tr><td>{e(n)}</td><td class="num">{s["games"]}</td><td class="num">{s["wins"]}</td>'
+                  f'<td class="num">{s["draws"]}</td><td class="num">{pct(s["wins"] / s["games"], 0)}</td>'
+                  f'<td>{e(", ".join(f"{short(c)} {s["wins_by_commander"][c]}/{k}" for c, k in s["by_commander"].most_common(2)))}</td></tr>'
+                  for n, s in rows)
+    recent = "".join(
+        f'<li><span class="muted">{e(g["date"])}</span> '
+        + " · ".join(f'{"<strong>" if g["winner"] == s["player"] else ""}{e(s["player"])} '
+                     f'<span class="muted">{e(short(s["commander"]))}</span>{"</strong>" if g["winner"] == s["player"] else ""}'
+                     for s in g["seats"])
+        + (" <span class=\"tag\">draw</span>" if g["winner"] is None else "") + "</li>"
+        for g in reversed(games[-12:]))
+    return (f'<div class="scroll"><table><thead><tr><th>Player</th><th>Games</th><th>Wins</th><th>Draws</th>'
+            f'<th>Win %</th><th>Decks</th></tr></thead><tbody>{trs}</tbody></table></div>'
+            f'<h3>Recent games</h3><ol class="games">{recent}</ol>'
+            '<p class="muted small">Players listed in turn order. Winner in bold. In 4-player games about 20–25% is average.</p>')
+
+
+CSS = """
+:root{--bg:#f7f6f3;--surface:#fff;--ink:#1d1b18;--muted:#6b665e;--line:#e4e0d8;--accent:#6b3fd1;--accent-ink:#fff;
+--good:#1f7a4a;--bad:#b4372b;--bar:#d9cff5;--good-bg:#e3f3ea;--bad-bg:#f8e3e0}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141311;--surface:#1d1c19;--ink:#ece8e1;
+--muted:#a39d93;--line:#2f2d29;--accent:#a98bf2;--accent-ink:#141311;--good:#5fc792;--bad:#ef7d70;--bar:#3a3159;
+--good-bg:#173226;--bad-bg:#3a1d19}}
+:root[data-theme="dark"]{--bg:#141311;--surface:#1d1c19;--ink:#ece8e1;--muted:#a39d93;--line:#2f2d29;--accent:#a98bf2;
+--accent-ink:#141311;--good:#5fc792;--bad:#ef7d70;--bar:#3a3159;--good-bg:#173226;--bad-bg:#3a1d19}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:var(--accent)}code{font-size:.85em;background:var(--line);padding:.1em .35em;border-radius:4px;word-break:break-word}
+.wrap{max-width:1080px;margin:0 auto;padding:0 16px}
+header.top{border-bottom:1px solid var(--line);background:var(--surface)}
+header.top .wrap{display:flex;flex-wrap:wrap;align-items:baseline;gap:.25rem 1rem;padding-top:18px;padding-bottom:14px}
+header.top h1{font-size:1.35rem;margin:0;letter-spacing:-.01em}
+nav{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;gap:1rem;overflow-x:auto;padding-top:10px;padding-bottom:10px}
+nav a{color:var(--ink);text-decoration:none;white-space:nowrap;font-weight:600;font-size:.95rem}
+nav a:hover{color:var(--accent)}
+section{padding:28px 0 8px}section h2{font-size:1.2rem;margin:0 0 .75rem}
+.muted{color:var(--muted)}.small{font-size:.85rem}.lede{max-width:70ch}
+.empty{padding:1rem;border:1px dashed var(--line);border-radius:10px;color:var(--muted)}
+.note{font-size:.85rem;color:var(--muted);border-left:3px solid var(--accent);padding-left:.6rem}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+.card h3{margin:0 0 .5rem;font-size:1.05rem}
+.seats{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+@media (min-width:760px){.seats{grid-template-columns:1fr 1fr}}
+.seat{display:flex;gap:10px;border:1px solid var(--line);border-radius:10px;padding:10px}
+.seat-n{flex:none;width:28px;height:28px;border-radius:50%;background:var(--accent);color:var(--accent-ink);
+display:grid;place-items:center;font-weight:700}
+.seat-body{min-width:0}.deck{color:var(--muted)}.why{margin:.35rem 0 0;padding-left:1.1rem;font-size:.9rem}
+.tag{display:inline-block;font-size:.72rem;font-weight:600;padding:.05rem .4rem;border-radius:999px;
+background:var(--bar);margin-left:.35rem;vertical-align:middle}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.tabs button{font:inherit;font-weight:600;border:1px solid var(--line);background:var(--surface);color:var(--ink);
+padding:.35rem .8rem;border-radius:999px;cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{padding:.5rem .6rem;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-size:.78rem;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);white-space:nowrap}
+tr:last-child td{border-bottom:0}td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.cmdr{font-weight:600}.owner{display:block;font-size:.78rem;color:var(--accent)}
+td.share{min-width:96px;font-variant-numeric:tabular-nums}
+td.share .bar{display:block;height:6px;margin:4px 0 0;background:var(--bar);border-radius:3px;order:2}
+td.share{display:flex;flex-direction:column}
+.up{color:var(--good)}.down{color:var(--bad)}
+.grid{display:grid;gap:14px}@media (min-width:700px){.grid{grid-template-columns:1fr 1fr}}
+@media (min-width:1000px){.grid{grid-template-columns:1fr 1fr 1fr}}
+.player header{display:flex;justify-content:space-between;align-items:baseline;gap:.5rem;flex-wrap:wrap}
+.player .deck{margin:.1rem 0}.player p{margin:.2rem 0}
+.seatstrip{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:.6rem 0}
+.cell{border:1px solid var(--line);border-radius:8px;padding:.3rem .4rem;text-align:center}
+.cell .k{display:block;font-size:.7rem;color:var(--muted)}.cell .v{font-weight:700;font-variant-numeric:tabular-nums}
+.cell.best{background:var(--good-bg);border-color:var(--good)}.cell.worst{background:var(--bad-bg);border-color:var(--bad)}
+.mu h4{margin:.4rem 0 .15rem;font-size:.8rem;text-transform:uppercase;letter-spacing:.03em}
+.mu .weak h4{color:var(--bad)}.mu .strong h4{color:var(--good)}.mu ul{margin:0;padding-left:1.1rem;font-size:.88rem}
+.games{padding-left:1.3rem;font-size:.9rem}.games li{margin:.25rem 0}
+footer{margin-top:28px;border-top:1px solid var(--line);padding:18px 0 40px;font-size:.85rem;color:var(--muted)}
+"""
+
+JS = """
+document.querySelectorAll('.tabs').forEach(function(bar){
+  bar.addEventListener('click',function(ev){
+    var b=ev.target.closest('button[data-tab]'); if(!b) return;
+    bar.querySelectorAll('button').forEach(function(x){x.setAttribute('aria-selected',x===b?'true':'false')});
+    document.querySelectorAll('[role=tabpanel]').forEach(function(p){p.hidden=p.id!=='tab-'+b.dataset.tab});
+  });
+});
+"""
+
+
+def page(cfg: dict) -> str:
+    roster = load("roster.json")
+    games = load("games.json")["games"]
+    prof = Profiler(30, 16)
+    day = next_session()
+    sections = [
+        ("pods", "Next session", render_pods(build_pods(day, cfg))),
+        ("meta", "Meta", render_meta(meta_views(cfg), roster)),
+        ("players", "Players", render_players(roster, prof)),
+        ("practice", "Practice", render_practice(games)),
+    ]
+    nav = "".join(f'<a href="#{sid}">{e(t)}</a>' for sid, t, _ in sections)
+    body = "".join(f'<section id="{sid}"><div class="wrap"><h2>{e(t)}</h2>{h}</div></section>' for sid, t, h in sections)
+    home = cfg.get("home")
+    sub = f"Home: {area_label(home)}" if home else ""
+    stamp = datetime.now(timezone.utc).strftime("%b %d, %Y %H:%M UTC")
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>cEDH Playgroup</title><meta name="description" content="Practice pods, local and big-event meta, and player profiles for our cEDH playgroup.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%236b3fd1'/%3E%3Ctext x='16' y='22' font-size='16' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='700'%3EC%3C/text%3E%3C/svg%3E">
+<style>{CSS}</style></head><body>
+<header class="top"><div class="wrap"><h1>cEDH Playgroup</h1><span class="muted small">{e(sub)}</span></div></header>
+<nav><div class="wrap">{nav}</div></nav>
+<main>{body}</main>
+<footer><div class="wrap"><p>Tournament data from <a href="https://topdeck.gg">TopDeck.gg</a>. Updated {e(stamp)}.</p>
+<p>Win rates are four-player numbers: an average seat wins about 20% once draws are counted. Samples under ~10 games are hints, not findings.
+Built by the <a href="{REPO_URL}">cedh-playgroup</a> skill.</p></div></footer>
+<script>{JS}</script></body></html>"""
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--out", default="site")
+    a = ap.parse_args()
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    cfg = load("config.json")
+    (out / "index.html").write_text(page(cfg), encoding="utf-8")
+    (out / ".nojekyll").write_text("", encoding="utf-8")
+    print(f"Built {out / 'index.html'}")
+    print(ATTRIBUTION)
+
+
+if __name__ == "__main__":
+    main()

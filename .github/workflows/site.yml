@@ -1,0 +1,63 @@
+name: Build and publish site
+
+on:
+  schedule:
+    - cron: "0 9 * * *"        # nightly, 5am Eastern
+  push:
+    branches: [main]
+    paths:
+      - "data/**"
+      - "cedh-playgroup/scripts/**"
+      - ".github/workflows/site.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      CEDH_PLAYGROUP_DIR: ${{ github.workspace }}/data
+      TOPDECK_API_KEY: ${{ secrets.TOPDECK_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Sync TopDeck (last 90 days)
+        working-directory: cedh-playgroup/scripts
+        run: |
+          if [ -z "$TOPDECK_API_KEY" ]; then
+            echo "::warning::TOPDECK_API_KEY secret is not set; building without tournament data"
+          else
+            python sync.py --days 90
+          fi
+
+      - name: Build site
+        working-directory: cedh-playgroup/scripts
+        run: python build_site.py --out "$GITHUB_WORKSPACE/site"
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

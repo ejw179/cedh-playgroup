@@ -1,0 +1,137 @@
+{
+  "players": [
+    {
+      "name": "Darison",
+      "topdeck_id": "q73DmkaSfSWX19FooCHD61cUm8E2",
+      "topdeck_handle": "@dariboi",
+      "topdeck_name": "Darison E [TYRNT]",
+      "decks": [
+        {
+          "commander": "Sisay, Weatherlight Captain",
+          "primary": true
+        }
+      ],
+      "gauntlet_pilot": false,
+      "added": "2026-11-02"
+    },
+    {
+      "name": "Alex",
+      "topdeck_id": "s8cnrQpbD5S9xdDA0tYl433gxK53",
+      "topdeck_handle": "@pancho",
+      "topdeck_name": "Pancho [TYRNT]",
+      "decks": [
+        {
+          "commander": "Tayam, Luminous Enigma",
+          "primary": true
+        }
+      ],
+      "gauntlet_pilot": false,
+      "added": "2026-11-02"
+    },
+    {
+      "name": "Eric",
+      "topdeck_id": "oYrf8JZC4pa6jvoQEdUmkkjnFsT2",
+      "topdeck_handle": "",
+      "topdeck_name": "Eric Ward",
+      "decks": [
+        {
+          "commander": "Kraum, Ludevic's Opus / Tymna the Weaver",
+          "primary": true
+        },
+        {
+          "commander": "Kinnan, Bonder Prodigy",
+          "primary": false
+        }
+      ],
+      "gauntlet_pilot": false,
+      "added": "2026-11-02"
+    },
+    {
+      "name": "Ryan",
+      "topdeck_id": "NAnEj55NfLa0CLXI7R4wWIZIQ2F2",
+      "topdeck_handle": "",
+      "topdeck_name": "Breezy [TYRNT]",
+      "decks": [
+        {
+          "commander": "Kraum, Ludevic's Opus / Tymna the Weaver",
+          "primary": true
+        },
+        {
+          "commander": "Malcolm, Keen-Eyed Navigator / Tymna the Weaver",
+          "primary": false
+        },
+        {
+          "commander": "Urza, Lord High Artificer",
+          "primary": false
+        }
+      ],
+      "gauntlet_pilot": false,
+      "added": "2026-11-02"
+    },
+    {
+      "name": "Jeff",
+      "topdeck_id": "JelDIQ4n1GaeHlWCAmpMbgquE9R2",
+      "topdeck_handle": "@birdkast101010yahoocom",
+      "topdeck_name": "Powerhouseherman",
+      "decks": [
+        {
+          "commander": "Ob Nixilis, Captive Kingpin",
+          "primary": true
+        },
+        {
+          "commander": "Thrasios, Triton Hero / Yoshimaru, Ever Faithful",
+          "primary": false
+        }
+      ],
+      "gauntlet_pilot": false,
+      "added": "2026-11-02"
+    },
+    {
+      "name": "Saige",
+      "topdeck_id": "BIBBzlgiflVKHbk89h0z7mbOh1l1",
+      "topdeck_handle": "@qofhearts27",
+      "topdeck_name": "queenofhearts27",
+      "decks": [
+        {
+          "commander": "Brigid, Clachan's Heart",
+          "primary": true
+        }
+      ],
+      "gauntlet_pilot": false,
+      "added": "2026-11-02"
+    },
+    {
+      "name": "Francys",
+      "topdeck_id": "4yZo7lKT8pM4IOeCbMXaYn1t3oB2",
+      "topdeck_handle": "@flexlgod",
+      "topdeck_name": "FlexGod [TYRNT]",
+      "decks": [
+        {
+          "commander": "Arcum Dagsson",
+          "primary": true
+        }
+      ],
+      "gauntlet_pilot": false,
+      "added": "2026-11-02"
+    },
+    {
+      "name": "Ishmael",
+      "topdeck_id": "mFWN3foSS0OcKYqbCwwHHDtnTGu1",
+      "topdeck_handle": "@that-stoic",
+      "topdeck_name": "Ismael J [TYRNT]",
+      "decks": [
+        {
+          "commander": "Akiri, Line-Slinger / Thrasios, Triton Hero",
+          "primary": true
+        },
+        {
+          "commander": "Rograkh, Son of Rohgahh / Thrasios, Triton Hero",
+          "primary": false
+        }
+      ],
+      "gauntlet_pilot": false,
+      "added": "2026-11-02"
+    }
+  ],
+  "gauntlet_decks": []
+}

@@ -319,6 +319,23 @@ show it, and send on a second yes. If the user already said "and post it to
 Discord" in their request, one look at the preview is still required before
 sending.
 
+## 6. The group website
+
+The group has a public site at https://ejw179.github.io/cedh-playgroup, built
+by `scripts/build_site.py`. It shows next session's pods with a per-player
+why, the meta (local, big events, global), player profiles and practice
+standings. A GitHub Action in the repo
+(`.github/workflows/site.yml`) rebuilds it nightly after syncing TopDeck,
+and on every push that touches `data/` or the scripts.
+
+So **after you change group data** (log games, set a session, add players,
+change decks), the site doesn't update until `data/` is committed and pushed.
+Offer it: "Want me to push this so the site updates?" On yes, commit only
+`data/*.json` with a short message ("Log 11/2 practice games") and push. The
+cache and outbox are git-ignored. Remember the site is public: names, decks
+and records are visible to anyone with the link. Never put anything private
+in notes. To preview locally: `python scripts/build_site.py --out site`.
+
 ## Things to get right
 
 - Players are identified by TopDeck ID, never by display name alone.

@@ -267,7 +267,7 @@ class Model:
         return pods, decks, notes, bench
 
 
-def main():
+def parser():
     ap = argparse.ArgumentParser()
     ap.add_argument("--date"); ap.add_argument("--players", nargs="*")
     ap.add_argument("--all", action="store_true", help="everyone on the roster")
@@ -284,8 +284,12 @@ def main():
     ap.add_argument("--iterations", type=int, default=400); ap.add_argument("--json", action="store_true")
     ap.add_argument("--seat-mode", choices=["practice", "best", "random"], default="practice",
                     help="practice: seat players where they're weakest; best: rehearse best seats")
-    a = ap.parse_args()
+    return ap
 
+
+def plan(a) -> tuple["Model", dict]:
+    """Build pods for parsed args `a`; returns the model and the JSON-able result.
+    Used by main() and by build_site.py."""
     m = Model(a)
     pods, decks, notes, bench = m.solve()
     rng = random.Random(a.seed)
@@ -323,9 +327,17 @@ def main():
         result["pods"].append({
             "pod": i, "seats": seats, "strength": round(pn["strength"], 3), "meta_decks": pn["meta"],
             "repeat_pairings": pn["repeats"], "warnings": pn["warnings"]})
+    result["meta_label"] = m.meta_label
+    return m, result
+
+
+def main():
+    a = parser().parse_args()
+    m, result = plan(a)
     if a.json:
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return
+    bench = result["bench"]
     print("Seat = turn order. Field win rate by seat: "
           + ", ".join(f"{i + 1}: {f * 100:.1f}%" for i, f in enumerate(m.prof.field_seats))
           + f". Seating mode: {a.seat_mode}. Meta used for 'face the top meta': {m.meta_label}.\n")

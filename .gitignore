@@ -10,3 +10,9 @@ __pycache__/
 
 # secrets live in env vars (TOPDECK_API_KEY, DISCORD_WEBHOOK_URL), never in files
 .env
+
+# group data lives in data/; the TopDeck cache is rebuilt by sync, the outbox is local only
+data/cache/
+data/outbox/
+site/
+.claude/
