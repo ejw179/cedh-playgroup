@@ -16,3 +16,4 @@ data/cache/
 data/outbox/
 site/
 .claude/
+data/ai_notes.json

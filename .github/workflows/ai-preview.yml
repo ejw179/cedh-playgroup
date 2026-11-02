@@ -1,0 +1,39 @@
+name: Preview Claude notes
+
+# Generates the Claude-written notes from current data and uploads them as an
+# artifact, without publishing anything. Run by hand to review the notes.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    env:
+      CEDH_PLAYGROUP_DIR: ${{ github.workspace }}/data
+      TOPDECK_API_KEY: ${{ secrets.TOPDECK_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install anthropic
+
+      - name: Sync TopDeck (last 90 days)
+        working-directory: cedh-playgroup/scripts
+        run: python sync.py --days 90
+
+      - name: Generate notes
+        working-directory: cedh-playgroup/scripts
+        run: python ai_notes.py --force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai-notes
+          path: data/ai_notes.json
+          if-no-files-found: warn
