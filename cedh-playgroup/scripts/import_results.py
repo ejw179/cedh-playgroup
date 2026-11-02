@@ -102,6 +102,8 @@ def main():
     for sub in sorted(subs, key=lambda s: s.get("received", "")):
         if sub.get("id") in seen:
             continue
+        if (sub.get("payload") or {}).get("type", "result") != "result":
+            continue  # e.g. "Plan a session" requests, handled by plan_sessions.py
         game, problem = to_game(sub, roster)
         if not game:
             skipped.append(f"{sub.get('id')}: {problem}")

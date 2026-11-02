@@ -383,6 +383,20 @@ cache and outbox are git-ignored. Remember the site is public: names, decks
 and records are visible to anyone with the link. Never put anything private
 in notes. To preview locally: `python scripts/build_site.py --out site`.
 
+### Planning a session on the site
+
+The site's **Plan a session** form (top of *Next session*) lets anyone with
+the PIN pick a date, tick who's playing, choose seats (practise weak seats,
+rehearse best seats, or random), choose the meta to face (local, big events,
+global, or none), and optionally pick focus players. The request goes to the
+same Apps Script as results. The *Import pod results* workflow (every 10
+minutes) runs `scripts/plan_sessions.py`, which records availability, builds
+the pods with the same logic as `pods.py`, and saves them. Planning the same
+date again replaces its pods. The site lists every upcoming saved session.
+When someone asks you in chat to change pods that were planned on the site,
+re-plan with `pods.py --save` and say what changed. Don't silently re-seat
+people who've already seen their pod.
+
 ### Claude's notes on the site
 
 `scripts/ai_notes.py` asks Claude (Opus 5.5) for short written analysis

@@ -56,11 +56,11 @@ def meta_views(cfg: dict) -> list[dict]:
     return views
 
 
-def next_session() -> str | None:
-    """The earliest saved session from today on, else the most recent one."""
+def upcoming_sessions() -> list[str]:
+    """Every saved session from today on (soonest first), else the most recent one."""
     sessions = sorted(load("availability.json")["sessions"])
     upcoming = [d for d in sessions if d >= date.today().isoformat()]
-    return upcoming[0] if upcoming else (sessions[-1] if sessions else None)
+    return upcoming or sessions[-1:]
 
 
 def build_pods(day: str, cfg: dict) -> dict | None:
@@ -172,17 +172,61 @@ def ai_block(title: str, body: str, ai: dict) -> str:
             f'<span class="muted small">Written by Claude from these stats · {e(when)}</span></div>{body}</div>')
 
 
+def plan_form(roster: dict, results_url: str) -> str:
+    """'Plan a session': date, who's playing, scenario. The import job builds and saves the pods."""
+    if not results_url:
+        return ""
+    names = [p["name"] for p in roster["players"]]
+    boxes = "".join(f'<label class="chip"><input type="checkbox" name="players" value="{e(n)}"> {e(n)}</label>'
+                    for n in names)
+    focus = "".join(f'<label class="chip"><input type="checkbox" name="focus" value="{e(n)}"> {e(n)}</label>'
+                    for n in names)
+
+    def radios(name, opts, default):
+        return "".join(f'<label class="chip"><input type="radio" name="{name}" value="{v}"'
+                       f'{" checked" if v == default else ""}> {e(t)}</label>' for v, t in opts)
+
+    seats = radios("seats", [("practice", "Practise weak seats"), ("best", "Rehearse best seats"),
+                             ("random", "Random seats")], "practice")
+    meta = radios("meta", [("local", "Local meta"), ("big", "Big events"), ("global", "Global"),
+                           ("none", "Don’t weight meta")], "local")
+    return (f'<details class="report plan"><summary>Plan a session</summary>'
+            f'<form class="pf">'
+            f'<div class="rf-row two"><label>Date <input name="date" type="date" required></label>'
+            f'<label>Your name <input name="reporter" maxlength="60"></label></div>'
+            f'<div class="rf-row"><span class="rf-label">Who’s playing (3 or more)</span><div class="chips">{boxes}</div></div>'
+            f'<div class="rf-row"><span class="rf-label">Seats</span><div class="chips">{seats}</div></div>'
+            f'<div class="rf-row"><span class="rf-label">Meta to face</span><div class="chips">{meta}</div></div>'
+            f'<div class="rf-row"><span class="rf-label">Focus on weak matchups for (optional)</span>'
+            f'<div class="chips">{focus}</div></div>'
+            f'<label>Group PIN <input name="pin" type="password" autocomplete="off" required></label>'
+            f'<p class="muted small">Pods are built with each player’s practice decks and seat data, then appear '
+            f'here within about 10 minutes. Planning the same date again replaces its pods.</p>'
+            f'<button type="submit">Build pods</button> <span class="rf-status" role="status"></span>'
+            f'</form></details>')
+
+
 def render_pods(p: dict | None, games: list[dict], results_url: str, ai: dict | None = None) -> str:
     if not p:
-        return ('<p class="empty">No session saved yet. Tell Claude who\'s playing '
-                '("everyone except Jeff on Saturday") and pods appear here.</p>')
+        return ('<p class="empty">No session saved yet. Use <strong>Plan a session</strong> above, or tell Claude '
+                'who\'s playing ("everyone except Jeff on Saturday").</p>')
     dt = datetime.fromisoformat(p["date"])
     d = f"{dt:%a %b} {dt.day}"  # %-d isn't portable to Windows
     seats_avg = " · ".join(f"seat {i + 1}: {pct(f)}" for i, f in enumerate(p["field_seats"]))
-    draft = ('<p class="note">Draft seating, not locked in yet. It can change until Claude saves it '
-             '("save the pods").</p>' if p.get("draft") else "")
-    parts = [f'<p class="lede">Session <strong>{e(d)}</strong>. Seat = turn order; each player sits where their '
-             f'record is weakest compared with what that seat normally wins ({e(seats_avg)}).</p>{draft}']
+    draft = ('<p class="note">Draft seating, not locked in yet. Plan it above (or ask Claude to save it) '
+             'to lock it in.</p>' if p.get("draft") else "")
+    how = {"practice": "each player sits where their record is weakest compared with what that seat normally wins",
+           "best": "each player sits in their strongest seat (tournament rehearsal)",
+           "random": "seats are shuffled"}.get(p.get("seat_mode", "practice"), "")
+    sc = p.get("scenario") or {}
+    plan = ""
+    if sc:
+        lens = {"local": "local meta", "big": "big-event meta", "global": "global meta", "none": "no meta weighting"}
+        plan = (f' Planned{" by " + e(p["requested_by"]) if p.get("requested_by") else ""}: '
+                f'{e(lens.get(sc.get("meta"), sc.get("meta", "")))}'
+                + (f', focus on {e(", ".join(sc["focus"]))}' if sc.get("focus") else "") + ".")
+    parts = [f'<h3 class="session-h">{e(d)}</h3>'
+             f'<p class="lede">Seat = turn order; {e(how)} ({e(seats_avg)}).{plan}</p>{draft}']
     for pod in p["pods"]:
         cards = []
         for s in pod["seats"]:
@@ -426,6 +470,7 @@ padding:.55rem 1.1rem;cursor:pointer;justify-self:start}.rf button[disabled]{opa
 margin:.6rem 0;background:var(--surface)}.ai-head{display:flex;justify-content:space-between;gap:.5rem;flex-wrap:wrap}
 .ai ul{margin:.35rem 0 0;padding-left:1.1rem;font-size:.92rem}.ai li{margin:.2rem 0}.ai p{margin:.35rem 0 0;font-size:.92rem}
 .ai .next{color:var(--ink)}
+.session-h{margin:1.4rem 0 .2rem;font-size:1.1rem}.plan{margin-bottom:.5rem}
 .rf-status{font-size:.9rem}.rf-status.ok{color:var(--good)}.rf-status.err{color:var(--bad)}
 """
 
@@ -455,7 +500,7 @@ document.querySelectorAll('form.rf').forEach(function(f){
                decklist: fs.querySelector('[name=decklist]').value.trim(),
                note: fs.querySelector('[name=note]').value.trim() };
     });
-    var body = { date: f.dataset.date, pod: Number(f.dataset.pod), winner: winner.value, seats: seats,
+    var body = { type: 'result', date: f.dataset.date, pod: Number(f.dataset.pod), winner: winner.value, seats: seats,
                  reporter: who.value.trim(), pin: pin.value.trim() };
     btn.disabled = true; status.className = 'rf-status'; status.textContent = 'Sending…';
     fetch(RESULTS_URL, { method: 'POST', body: JSON.stringify(body) })
@@ -472,6 +517,33 @@ document.querySelectorAll('form.rf').forEach(function(f){
       .then(function(){ btn.disabled = false; });
   });
 });
+
+// "Plan a session": who's playing + scenario; the import job builds and saves the pods.
+document.querySelectorAll('form.pf').forEach(function(f){
+  var pin = f.querySelector('[name=pin]'), who = f.querySelector('[name=reporter]');
+  pin.value = store('cedh-pin') || ''; who.value = store('cedh-reporter') || '';
+  function checked(name){ return Array.prototype.map.call(f.querySelectorAll('[name=' + name + ']:checked'), function(x){ return x.value; }); }
+  f.addEventListener('submit', function(ev){
+    ev.preventDefault();
+    var status = f.querySelector('.rf-status'), btn = f.querySelector('button');
+    var players = checked('players');
+    if (players.length < 3) { status.className = 'rf-status err'; status.textContent = 'Pick at least 3 players.'; return; }
+    var body = { type: 'session', date: f.querySelector('[name=date]').value, players: players,
+                 seats: checked('seats')[0], meta: checked('meta')[0], focus: checked('focus'),
+                 reporter: who.value.trim(), pin: pin.value.trim() };
+    btn.disabled = true; status.className = 'rf-status'; status.textContent = 'Sending…';
+    fetch(RESULTS_URL, { method: 'POST', body: JSON.stringify(body) })
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if (!res.ok) throw new Error(res.error || 'Not saved.');
+        store('cedh-pin', body.pin); store('cedh-reporter', body.reporter);
+        status.className = 'rf-status ok';
+        status.textContent = 'Request saved. Pods for ' + body.date + ' will appear on this page within about 10 minutes.';
+      })
+      .catch(function(err){ status.className = 'rf-status err'; status.textContent = 'Not saved: ' + err.message; })
+      .then(function(){ btn.disabled = false; });
+  });
+});
 """
 
 
@@ -480,9 +552,11 @@ def page(cfg: dict) -> str:
     games = load("games.json")["games"]
     prof = Profiler(30, 16)
     ai = load_ai()
-    day = next_session()
+    days = upcoming_sessions()
     sections = [
-        ("pods", "Next session", render_pods(build_pods(day, cfg), games, cfg.get("results_url", ""), ai)),
+        ("pods", "Next session", plan_form(roster, cfg.get("results_url", ""))
+         + ("".join(render_pods(build_pods(d, cfg), games, cfg.get("results_url", ""), ai) for d in days)
+            or render_pods(None, games, cfg.get("results_url", ""), ai))),
         ("meta", "Meta", render_meta(meta_views(cfg), roster, ai)),
         ("players", "Players", render_players(roster, prof, games, ai)),
         ("practice", "Practice", render_practice(games)),

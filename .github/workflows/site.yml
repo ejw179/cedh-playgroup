@@ -33,6 +33,12 @@ jobs:
         with:
           python-version: "3.12"
 
+      - uses: actions/cache/restore@v4
+        with:
+          path: data/cache
+          key: topdeck-cache-${{ github.run_id }}
+          restore-keys: topdeck-cache-
+
       - name: Sync TopDeck (last 90 days)
         working-directory: cedh-playgroup/scripts
         run: |
@@ -41,6 +47,13 @@ jobs:
           else
             python sync.py --days 90
           fi
+
+      # share the fresh TopDeck cache with the import job (it builds pods for web requests)
+      - uses: actions/cache/save@v4
+        if: hashFiles('data/cache/tournaments.json') != ''
+        with:
+          path: data/cache
+          key: topdeck-cache-${{ github.run_id }}
 
       # Claude-written notes: reuse the last ones when the data hasn't changed
       - run: pip install anthropic

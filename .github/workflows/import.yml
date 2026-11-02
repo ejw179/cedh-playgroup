@@ -5,7 +5,7 @@ name: Import pod results
 # anything changed, commit and rebuild the site.
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "*/10 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -32,6 +32,26 @@ jobs:
         working-directory: cedh-playgroup/scripts
         run: python import_results.py
 
+      # "Plan a session" requests: building pods needs the TopDeck cache for seat
+      # and matchup data, so restore the one the site build saved (or sync if none).
+      - uses: actions/cache/restore@v4
+        with:
+          path: data/cache
+          key: topdeck-cache-${{ github.run_id }}
+          restore-keys: topdeck-cache-
+
+      - name: Plan requested sessions
+        working-directory: cedh-playgroup/scripts
+        env:
+          TOPDECK_API_KEY: ${{ secrets.TOPDECK_API_KEY }}
+        run: |
+          if python plan_sessions.py --pending; then
+            [ -f "$CEDH_PLAYGROUP_DIR/cache/tournaments.json" ] || python sync.py --days 90
+            python plan_sessions.py
+          else
+            echo "No new session requests."
+          fi
+
       - name: Commit and rebuild if anything changed
         env:
           GH_TOKEN: ${{ github.token }}
@@ -42,8 +62,8 @@ jobs:
           fi
           git config user.name "cedh-playgroup bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/games.json data/roster.json
-          git commit -m "Import pod results from the site"
+          git add data/games.json data/roster.json data/pods.json data/availability.json
+          git commit -m "Import results and session requests from the site"
           git push
           # pushes made with this token don't trigger other workflows, so start the site build directly
           gh workflow run site.yml --ref main
