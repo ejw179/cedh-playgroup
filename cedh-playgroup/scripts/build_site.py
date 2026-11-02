@@ -306,7 +306,8 @@ def render_meta(views: list[dict], roster: dict, ai: dict | None = None) -> str:
     return f'<div class="tabs" role="tablist">{"".join(tabs)}</div>{"".join(panels)}'
 
 
-def render_players(roster: dict, prof: Profiler, games: list[dict], ai: dict | None = None) -> str:
+def render_players(roster: dict, prof: Profiler, games: list[dict], ai: dict | None = None,
+                   results_url: str = "") -> str:
     coach = {c.get("name"): c for c in (ai or {}).get("players", [])}
     reports = {r["name"]: r for r in player_report([], 60)}
     cards = []
@@ -356,8 +357,45 @@ def render_players(roster: dict, prof: Profiler, games: list[dict], ai: dict | N
                      + (ai_block("Coach’s note", f'<p>{e(coach[p["name"]]["note"])}</p>'
                                  f'<p class="next"><strong>Next:</strong> {e(coach[p["name"]]["next_step"])}</p>', ai)
                         if p["name"] in coach else "") +
-                     f'<div class="seatstrip">{"".join(seat_cells)}</div><div class="mu">{mu}</div></article>')
+                     f'<div class="seatstrip">{"".join(seat_cells)}</div><div class="mu">{mu}</div>'
+                     f'{practice_form(p, results_url)}</article>')
     return f'<div class="grid">{"".join(cards)}</div>'
+
+
+def commander_list(roster: dict) -> list[str]:
+    """Every commander for the practice-deck dropdowns: roster decks plus everything
+    seen on TopDeck in the cache window, most-played first."""
+    counts = defaultdict(int)
+    for t in tournaments(3650):
+        for s in t.get("standings", []):
+            if s.get("leader"):
+                counts[s["leader"]] += 1
+    for p in roster["players"]:
+        for d in p.get("decks", []) + p.get("practice_decks", []):
+            counts[d["commander"]] += 1
+    return sorted(counts, key=lambda c: (-counts[c], c))
+
+
+def practice_form(p: dict, results_url: str) -> str:
+    """'Set practice decks': three dropdowns (#1-#3) plus optional decklist links."""
+    if not results_url:
+        return ""
+    own = [d["commander"] for d in p.get("decks", [])]
+    cur = p.get("practice_decks", [])
+    rows = "".join(
+        f'<div class="pd-row"><span class="pd-n">{i}</span>'
+        f'<select name="deck" data-current="{e(cur[i - 1]["commander"] if i <= len(cur) else "")}" '
+        f'aria-label="Practice deck {i}"></select>'
+        f'<input name="list" type="url" placeholder="Decklist link (optional)" '
+        f'value="{e(cur[i - 1].get("list", "") if i <= len(cur) else "")}" aria-label="Decklist link {i}"></div>'
+        for i in (1, 2, 3))
+    return (f'<details class="report"><summary>Set practice decks</summary>'
+            f'<form class="pd" data-player="{e(p["name"])}" data-own="{e(json.dumps(own))}">'
+            f'<p class="muted small">Up to 3 decks you want reps on, most important first. '
+            f'Pods seat you on #1 unless it clashes.</p>{rows}'
+            f'<label>Group PIN <input name="pin" type="password" autocomplete="off" required></label>'
+            f'<button type="submit">Save practice decks</button> <span class="rf-status" role="status"></span>'
+            f'</form></details>')
 
 
 def render_practice(games: list[dict]) -> str:
@@ -471,6 +509,12 @@ margin:.6rem 0;background:var(--surface)}.ai-head{display:flex;justify-content:s
 .ai ul{margin:.35rem 0 0;padding-left:1.1rem;font-size:.92rem}.ai li{margin:.2rem 0}.ai p{margin:.35rem 0 0;font-size:.92rem}
 .ai .next{color:var(--ink)}
 .session-h{margin:1.4rem 0 .2rem;font-size:1.1rem}.plan{margin-bottom:.5rem}
+.pd-row{display:grid;grid-template-columns:auto 1fr;gap:6px 8px;align-items:center}.pd-row input{grid-column:2}
+.pd-n{width:22px;height:22px;border-radius:50%;background:var(--bar);display:grid;place-items:center;font-size:.75rem;font-weight:700}
+.pd select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:.45rem .5rem;width:100%;min-width:0}
+.pd{display:grid;gap:10px;margin-top:10px}.pd label{display:grid;gap:3px;font-size:.85rem;color:var(--muted)}
+.pd input{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:.45rem .55rem;width:100%}
+.pd button{font:inherit;font-weight:700;background:var(--accent);color:var(--accent-ink);border:0;border-radius:999px;padding:.55rem 1.1rem;cursor:pointer;justify-self:start}
 .rf-status{font-size:.9rem}.rf-status.ok{color:var(--good)}.rf-status.err{color:var(--bad)}
 """
 
@@ -544,6 +588,48 @@ document.querySelectorAll('form.pf').forEach(function(f){
       .then(function(){ btn.disabled = false; });
   });
 });
+
+// "Set practice decks": fill each dropdown from one shared list (the player's own decks first).
+var CMDRS = [];
+try { CMDRS = JSON.parse(document.getElementById('cmdrs').textContent); } catch (e) {}
+function shortName(c){ return c.split(' / ').map(function(p){ return p.split(',')[0].split(' the ')[0].trim(); }).join('/'); }
+function opt(v, t){ var o = document.createElement('option'); o.value = v; o.textContent = t; return o; }
+document.querySelectorAll('form.pd').forEach(function(f){
+  var own = []; try { own = JSON.parse(f.dataset.own || '[]'); } catch (e) {}
+  f.querySelectorAll('select[name=deck]').forEach(function(sel){
+    sel.appendChild(opt('', '— none —'));
+    var mine = document.createElement('optgroup'); mine.label = 'Your decks';
+    own.forEach(function(c){ mine.appendChild(opt(c, shortName(c))); });
+    if (own.length) sel.appendChild(mine);
+    var all = document.createElement('optgroup'); all.label = 'All commanders (most played first)';
+    CMDRS.forEach(function(c){ if (own.indexOf(c) < 0) all.appendChild(opt(c, shortName(c) + (shortName(c) !== c ? ' — ' + c : ''))); });
+    sel.appendChild(all);
+    sel.value = sel.dataset.current || '';
+  });
+  var pin = f.querySelector('[name=pin]'); pin.value = store('cedh-pin') || '';
+  f.addEventListener('submit', function(ev){
+    ev.preventDefault();
+    var status = f.querySelector('.rf-status'), btn = f.querySelector('button');
+    var decks = [], seen = {};
+    f.querySelectorAll('.pd-row').forEach(function(row){
+      var c = row.querySelector('select').value, l = row.querySelector('input').value.trim();
+      if (c && !seen[c]) { seen[c] = 1; decks.push({ commander: c, list: l }); }
+    });
+    var body = { type: 'practice', player: f.dataset.player, decks: decks, pin: pin.value.trim() };
+    btn.disabled = true; status.className = 'rf-status'; status.textContent = 'Sending…';
+    fetch(RESULTS_URL, { method: 'POST', body: JSON.stringify(body) })
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if (!res.ok) throw new Error(res.error || 'Not saved.');
+        store('cedh-pin', body.pin);
+        status.className = 'rf-status ok';
+        status.textContent = decks.length ? 'Saved. Your profile and next pods will use these within about 10 minutes.'
+                                          : 'Saved: practice decks cleared.';
+      })
+      .catch(function(err){ status.className = 'rf-status err'; status.textContent = 'Not saved: ' + err.message; })
+      .then(function(){ btn.disabled = false; });
+  });
+});
 """
 
 
@@ -558,7 +644,7 @@ def page(cfg: dict) -> str:
          + ("".join(render_pods(build_pods(d, cfg), games, cfg.get("results_url", ""), ai) for d in days)
             or render_pods(None, games, cfg.get("results_url", ""), ai))),
         ("meta", "Meta", render_meta(meta_views(cfg), roster, ai)),
-        ("players", "Players", render_players(roster, prof, games, ai)),
+        ("players", "Players", render_players(roster, prof, games, ai, cfg.get("results_url", ""))),
         ("practice", "Practice", render_practice(games)),
     ]
     nav = "".join(f'<a href="#{sid}">{e(t)}</a>' for sid, t, _ in sections)
@@ -577,6 +663,7 @@ def page(cfg: dict) -> str:
 <footer><div class="wrap"><p>Tournament data from <a href="https://topdeck.gg">TopDeck.gg</a>. Updated {e(stamp)}.</p>
 <p>Win rates are four-player numbers: an average seat wins about 20% once draws are counted. Samples under ~10 games are hints, not findings.
 Built by the <a href="{REPO_URL}">cedh-playgroup</a> skill.</p></div></footer>
+<script id="cmdrs" type="application/json">{json.dumps(commander_list(roster), ensure_ascii=False).replace("</", "<\\/")}</script>
 <script>{JS}</script></body></html>"""
 
 

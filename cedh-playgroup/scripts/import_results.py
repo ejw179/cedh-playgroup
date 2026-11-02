@@ -103,7 +103,7 @@ def main():
         if sub.get("id") in seen:
             continue
         if (sub.get("payload") or {}).get("type", "result") != "result":
-            continue  # e.g. "Plan a session" requests, handled by plan_sessions.py
+            continue  # "Plan a session" (plan_sessions.py) and "practice" (apply_practice) requests
         game, problem = to_game(sub, roster)
         if not game:
             skipped.append(f"{sub.get('id')}: {problem}")
@@ -121,12 +121,53 @@ def main():
         print(f"Imported: {game['date']} pod {game.get('pod', '-')}: "
               + ", ".join(f"{i}. {s['player']}" for i, s in enumerate(game["seats"], 1))
               + f" -> {'draw' if game['winner'] is None else game['winner'] + ' won'}")
+    changed = apply_practice(subs, roster, seen)
     if added:
         save("games.json", games)
+    if added or changed:
         save("roster.json", roster)
     for s in skipped:
         print(f"Skipped {s}", file=sys.stderr)
-    print(f"{added} new result(s) imported, {len(skipped)} skipped.")
+    print(f"{added} new result(s) imported, {len(skipped)} skipped, {changed} practice-deck update(s).")
+
+
+def apply_practice(subs: list[dict], roster: dict, ignored: set) -> int:
+    """'Set practice decks' requests from the players tab: up to 3 decks in
+    priority order, each with an optional decklist link. Latest per player wins."""
+    done = set(roster.get("applied_requests", []))
+    reqs = [s for s in subs if (s.get("payload") or {}).get("type") == "practice"
+            and s.get("id") not in done and s.get("id") not in ignored]
+    changed = 0
+    for sub in sorted(reqs, key=lambda s: s.get("received", "")):
+        roster.setdefault("applied_requests", []).append(sub["id"])
+        p = sub["payload"]
+        pl = find_player(roster, str(p.get("player", "")))
+        if not pl:
+            print(f"Skipped practice decks {sub['id']}: unknown player {p.get('player')!r}", file=sys.stderr)
+            continue
+        out = []
+        for d in (p.get("decks") or [])[:3]:
+            mine = [x["commander"] for x in pl.get("decks", [])]
+            name = str(d.get("commander") or "").strip()
+            if not name:
+                continue
+            cmdr = match_commander(name, mine)[0]
+            if any(o["commander"] == cmdr for o in out):
+                continue
+            url = str(d.get("list") or "").strip()
+            out.append({"commander": cmdr, **({"list": url} if url.startswith(("https://", "http://")) else {})})
+        pl["practice_decks"] = out  # an empty list clears them
+        for o in out:
+            deck = next((x for x in pl.setdefault("decks", []) if x["commander"] == o["commander"]), None)
+            if not deck:
+                deck = {"commander": o["commander"], "primary": not pl["decks"]}
+                pl["decks"].append(deck)
+            if o.get("list"):
+                deck["list"] = o["list"]
+        changed += 1
+        print(f"Practice decks for {pl['name']}: " + (", ".join(f"{i}. {o['commander']}" for i, o in
+                                                              enumerate(out, 1)) or "cleared"))
+    return changed
 
 
 if __name__ == "__main__":

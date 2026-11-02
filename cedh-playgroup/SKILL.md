@@ -383,6 +383,12 @@ cache and outbox are git-ignored. Remember the site is public: names, decks
 and records are visible to anyone with the link. Never put anything private
 in notes. To preview locally: `python scripts/build_site.py --out site`.
 
+Players can also set their own practice decks on the site: each player card
+has **Set practice decks**, with three dropdowns (their own decks first, then
+every commander seen on TopDeck) and optional decklist links. The import job
+applies it to the roster (`import_results.py`, latest request per player
+wins; an empty set clears them).
+
 ### Planning a session on the site
 
 The site's **Plan a session** form (top of *Next session*) lets anyone with
