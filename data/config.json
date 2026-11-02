@@ -6,5 +6,6 @@
     "place": "Hazleton, PA",
     "miles": 100.0
   },
-  "big_min_players": 101
+  "big_min_players": 101,
+  "results_url": "https://script.google.com/macros/s/AKfycbyd9P4yfRyoe_rnZDpB8fLWOEVsGa50VNPwHPFm63pIlyTNEjVkc8Wgvm7KbRoZpFUt/exec"
 }
