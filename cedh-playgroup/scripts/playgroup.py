@@ -7,6 +7,7 @@
   gauntlet-deck add|remove CMDR [--list URL]   # shared meta decks the group owns
   log-game --date D --seat "Player=Commander" x3-5 --winner Player|draw [--note TEXT] [--no-order]
                                                 # seats in turn order (seat 1 first)
+  home --zip 18201 [--miles 100] [--big-min 101] # --local area, and what counts as a --big event
   note TEXT [--author NAME] [--tag T ...]
   avail DATE [NAME ...] [--replace | --all] [--remove NAME ...]
                                                 # e.g. avail 2026-11-08 --all --remove Jeff Saige
@@ -16,7 +17,8 @@
 import argparse
 import json
 
-from common import die, find_player, load, match_commander, resolve_profile, save, today, topdeck_id
+from common import (die, find_player, load, match_commander, resolve_profile, save, today, topdeck_id,
+                    zip_location)
 
 
 def resolve_or_warn(text: str) -> str:
@@ -140,6 +142,25 @@ def cmd_log_game(a):
           + f" -> {'draw' if winner is None else winner + ' won'}")
 
 
+def cmd_home(a):
+    """Save the group's home area so `--local` means 'near us'."""
+    cfg = load("config.json")
+    if a.zip:
+        loc = zip_location(a.zip)
+        cfg["home"] = {**loc, "miles": a.miles or 50}
+    elif a.miles and cfg.get("home"):
+        cfg["home"]["miles"] = a.miles
+    elif not cfg.get("home") and not a.big_min:
+        die("no home area yet: give --zip")
+    if a.big_min:
+        cfg["big_min_players"] = a.big_min
+    save("config.json", cfg)
+    h = cfg.get("home")
+    if h:
+        print(f"Home area (--local): within {h['miles']:g} miles of {h['zip']} ({h['place']}).")
+    print(f"Big events (--big): {cfg.get('big_min_players', 101)}+ players, anywhere.")
+
+
 def cmd_note(a):
     notes = load("notes.json")
     notes["notes"].append({"date": today(), "author": a.author or "", "text": a.text, "tags": a.tag or []})
@@ -218,6 +239,10 @@ def main():
     p.add_argument("--winner", required=True); p.add_argument("--note")
     p.add_argument("--no-order", action="store_true",
                    help="seats were NOT given in turn order (game still counts for matchups, not seat stats)")
+
+    p = sp.add_parser("home"); p.set_defaults(f=cmd_home)
+    p.add_argument("--zip"); p.add_argument("--miles", type=float)
+    p.add_argument("--big-min", type=int, help="player count that makes an event 'big' (default 101)")
 
     p = sp.add_parser("note"); p.set_defaults(f=cmd_note)
     p.add_argument("text"); p.add_argument("--author"); p.add_argument("--tag", action="append")

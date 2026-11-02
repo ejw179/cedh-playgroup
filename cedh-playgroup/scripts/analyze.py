@@ -1,7 +1,9 @@
 """Reports built from the TopDeck cache plus the group's own logs.
 
   meta     [--days 30] [--min-players 16] [--top 25] [--json]
-  matchups CMDR [--days 30] [--min-players 16] [--json]
+  meta     --local | --zip 18201 [--miles 100]   # only events near you (all sizes unless --min-players)
+  meta     --big                                 # only big events (over 100 players), anywhere
+  matchups CMDR [--days 30] [--min-players 16] [--local | --zip Z --miles M] [--json]
   matchups [CMDR] --player NAME [--days 90]    # that player's own tables, all event sizes
   players  [NAME ...] [--days 30] [--json]
 
@@ -12,17 +14,59 @@ import argparse
 import json
 from collections import Counter, defaultdict
 
-from common import ATTRIBUTION, die, find_player, fmt_date, load, match_commander, now_unix
+from common import (ATTRIBUTION, die, find_player, fmt_date, load, match_commander, miles_between,
+                    now_unix, zip_location)
 
 BASELINE = 0.25
 
 
-def tournaments(days: int, min_players: int = 0, offset_days: int = 0) -> list[dict]:
+def tournaments(days: int, min_players: int = 0, offset_days: int = 0, area: dict | None = None) -> list[dict]:
+    """Events in the window. With `area` ({lat, lng, miles}), only events whose
+    TopDeck coordinates fall inside that radius; events without coordinates
+    (online, or synced before coordinates were kept) are left out."""
     cache = load("cache/tournaments.json")
     hi = now_unix() - offset_days * 86400
     lo = hi - days * 86400
-    return [t for t in cache["tournaments"].values()
-            if lo <= (t.get("startDate") or 0) < hi and t.get("participants", 0) >= min_players]
+    out = []
+    for t in cache["tournaments"].values():
+        if not (lo <= (t.get("startDate") or 0) < hi and t.get("participants", 0) >= min_players):
+            continue
+        if area:
+            ev = t.get("eventData") or {}
+            if ev.get("lat") is None or ev.get("lng") is None:
+                continue
+            if miles_between(area["lat"], area["lng"], ev["lat"], ev["lng"]) > area["miles"]:
+                continue
+        out.append(t)
+    return out
+
+
+def resolve_area(a) -> dict | None:
+    """--zip Z [--miles M] for a one-off area, --local for the saved home area."""
+    if getattr(a, "zip", None):
+        loc = zip_location(a.zip)
+        return {**loc, "miles": a.miles or 50}
+    if getattr(a, "local", False):
+        home = load("config.json").get("home")
+        if not home:
+            die("no home area saved yet: python playgroup.py home --zip 92101 --miles 50")
+        return {**home, "miles": a.miles or home["miles"]}
+    return None
+
+
+def big_min() -> int:
+    """Player count that makes an event 'big' for --big (saved with playgroup.py home --big-min)."""
+    return int(load("config.json").get("big_min_players", 101))
+
+
+def area_label(area: dict | None) -> str:
+    return f"within {area['miles']:g} mi of {area['zip']} ({area['place']})" if area else "all TopDeck events"
+
+
+def coverage(days: int, offset_days: int = 0) -> tuple[int, int]:
+    """(events in window, events with coordinates): how much a radius filter can see."""
+    ts = tournaments(days, 0, offset_days)
+    return len(ts), sum(1 for t in ts if (t.get("eventData") or {}).get("lat") is not None)
 
 
 def meta(ts: list[dict]) -> dict:
@@ -332,9 +376,17 @@ def print_profile(pf: dict) -> None:
     print()
 
 
-def print_meta(m: dict, prev: dict | None, days: int, min_players: int, top: int):
-    print(f"## cEDH meta: last {days} days (events with {min_players}+ players)\n")
-    print(f"{m['events']} events, {m['total_entries']} entries with a known commander.\n")
+def print_meta(m: dict, prev: dict | None, days: int, min_players: int, top: int, area: dict | None = None):
+    size = f"{min_players}+ players" if min_players else "all sizes"
+    print(f"## cEDH meta: last {days} days, {area_label(area)} ({size})\n")
+    print(f"{m['events']} events, {m['total_entries']} entries with a known commander.")
+    if area:
+        n, located = coverage(days)
+        print(f"({located} of {n} events in this window have map coordinates; online events and "
+              f"events without a location can't be placed.)")
+        if m["total_entries"] < 150:
+            print("Small local sample: treat shares as a picture of who shows up, and win rates as hints.")
+    print()
     print("| # | Commander | Entries | Meta share | Δ share | Win rate | Draw rate | Top-cut conv. | Best |")
     print("|---|---|---|---|---|---|---|---|---|")
     rows = sorted(m["commanders"].items(), key=lambda kv: -kv[1]["entries"])[:top]
@@ -358,16 +410,32 @@ def main():
     sp = ap.add_subparsers(dest="cmd", required=True)
     for name in ("meta", "matchups", "players", "profile"):
         p = sp.add_parser(name)
-        p.add_argument("--days", type=int, default=30)
+        p.add_argument("--days", type=int, default=None, help="window (default 30; 90 with --big)")
         p.add_argument("--json", action="store_true")
         if name != "players":
-            p.add_argument("--min-players", type=int, default=16)
+            # default: 16+ for the global meta, every event size for a local one
+            p.add_argument("--min-players", type=int, default=None)
+        if name in ("meta", "matchups"):
+            p.add_argument("--local", action="store_true", help="only events in the saved home area")
+            p.add_argument("--zip", help="only events near this zip code")
+            p.add_argument("--miles", type=float, help="radius for --zip/--local (default 50, or the saved one)")
+            p.add_argument("--big", action="store_true", help="only big events (over 100 players by default)")
     sp.choices["profile"].add_argument("names", nargs="*")
     sp.choices["meta"].add_argument("--top", type=int, default=25)
     sp.choices["matchups"].add_argument("commander", nargs="?")
     sp.choices["matchups"].add_argument("--player", help="one roster player's own tournament tables")
     sp.choices["players"].add_argument("names", nargs="*")
     a = ap.parse_args()
+    area = resolve_area(a) if a.cmd in ("meta", "matchups") else None
+    if a.days is None:
+        # big events are rare (a couple a month), so they need a longer window to say anything
+        a.days = 90 if getattr(a, "big", False) else 30
+    if getattr(a, "big", False):
+        if area:
+            die("--big is the big-event meta from anywhere; don't combine it with --local/--zip")
+        a.min_players = big_min()
+    if a.cmd != "players" and a.min_players is None:
+        a.min_players = 0 if area else 16
 
     if a.cmd == "profile":
         roster = load("roster.json")
@@ -387,12 +455,12 @@ def main():
         return
 
     if a.cmd == "meta":
-        m = meta(tournaments(a.days, a.min_players))
-        prev = meta(tournaments(a.days, a.min_players, offset_days=a.days))
+        m = meta(tournaments(a.days, a.min_players, area=area))
+        prev = meta(tournaments(a.days, a.min_players, offset_days=a.days, area=area))
         if a.json:
-            print(json.dumps({"current": m, "previous": prev, "attribution": ATTRIBUTION}, indent=2))
+            print(json.dumps({"area": area, "current": m, "previous": prev, "attribution": ATTRIBUTION}, indent=2))
         else:
-            print_meta(m, prev, a.days, a.min_players, a.top)
+            print_meta(m, prev, a.days, a.min_players, a.top, area)
 
     elif a.cmd == "matchups":
         c = match_commander(a.commander)[0] if a.commander else None
@@ -406,7 +474,7 @@ def main():
         else:
             if not c:
                 die("give a commander, or --player NAME")
-            pairs = matchup_table(tournaments(a.days, a.min_players))
+            pairs = matchup_table(tournaments(a.days, a.min_players, area=area))
             who = None
         rows = [(x, b, v) for (x, b), v in pairs.items() if c is None or x == c]
         rows.sort(key=lambda r: -r[2]["games"])

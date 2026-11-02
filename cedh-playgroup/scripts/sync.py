@@ -58,7 +58,7 @@ def post(body: dict, key: str) -> list:
 def slim(t: dict) -> dict:
     """Keep only what the reports use, so the cache stays small."""
     keep = {k: t.get(k) for k in ("TID", "tournamentName", "startDate", "swissNum", "topCut", "format")}
-    keep["eventData"] = {k: (t.get("eventData") or {}).get(k) for k in ("city", "state", "location")}
+    keep["eventData"] = {k: (t.get("eventData") or {}).get(k) for k in ("city", "state", "address", "lat", "lng")}
     keep["standings"] = [
         {k: s.get(k) for k in ("standing", "name", "id", "leader", "wins", "draws", "losses", "winRate")}
         for s in t.get("standings", [])

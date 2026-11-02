@@ -1,9 +1,11 @@
 """Shared helpers: data folder, JSON load/save, commander name matching."""
 import json
+import math
 import os
 import re
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import date, datetime, timezone
@@ -22,6 +24,7 @@ DEFAULTS = {
     "notes.json": {"notes": []},
     "availability.json": {"sessions": {}},
     "cache/tournaments.json": {"tournaments": {}, "synced": []},
+    "config.json": {"home": None},
 }
 
 
@@ -72,6 +75,40 @@ def now_unix() -> int:
 
 def fmt_date(unix: float) -> str:
     return datetime.fromtimestamp(unix, tz=timezone.utc).date().isoformat()
+
+
+def zip_location(zipcode: str, country: str = "us") -> dict:
+    """Lat/lng for a postal code via the free Zippopotam.us API (no key; only
+    the zip is sent). Cached in <data>/zips.json so each zip is looked up once."""
+    zipcode = zipcode.strip()
+    cache_path = data_dir() / "zips.json"
+    cache = json.loads(cache_path.read_text(encoding="utf-8")) if cache_path.exists() else {}
+    key = f"{country}:{zipcode}"
+    if key in cache:
+        return cache[key]
+    url = f"https://api.zippopotam.us/{urllib.parse.quote(country)}/{urllib.parse.quote(zipcode)}"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "cedh-playgroup-skill"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            d = json.load(r)
+    except urllib.error.HTTPError as e:
+        die(f"zip {zipcode} not found ({e.code})" if e.code == 404 else f"zip lookup failed: HTTP {e.code}")
+    except urllib.error.URLError as e:
+        die(f"could not reach the zip lookup service: {e}")
+    place = d["places"][0]
+    loc = {"zip": zipcode, "lat": float(place["latitude"]), "lng": float(place["longitude"]),
+           "place": f"{place['place name']}, {place.get('state abbreviation') or place.get('state', '')}"}
+    cache[key] = loc
+    cache_path.write_text(json.dumps(cache, indent=2), encoding="utf-8")
+    return loc
+
+
+def miles_between(lat1, lng1, lat2, lng2) -> float:
+    r = 3958.8
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp, dl = p2 - p1, math.radians(lng2 - lng1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(a))
 
 
 def topdeck_id(raw: str) -> str:

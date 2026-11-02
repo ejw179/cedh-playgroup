@@ -97,6 +97,25 @@ python scripts/analyze.py matchups --player Eric     # the same, from one player
 Columns: entries, meta share, Δ share against the previous equal window, win
 rate, draw rate, top-cut conversion, and best finish.
 
+**Three lenses on the meta.** Pick the one the question is about, or show
+local and big side by side when the user just asks "what's the meta":
+
+| Lens | Command | Answers |
+|---|---|---|
+| Local | `meta --local` | What our group will actually face: events within the saved radius of home, every size, last 30 days |
+| Big events | `meta --big` | What wins at big tournaments: over 100 players, anywhere, last 90 days (they're rare) |
+| Global | `meta` | Everything on TopDeck with 16+ players |
+
+Set the home area and the "big" threshold once with
+`playgroup.py home --zip 18201 --miles 100 --big-min 101`, or use a one-off
+`--zip Z --miles M`. The local view uses TopDeck's event coordinates. Online
+events and events without a location can't be placed, and the report says
+how many are missing. Local samples are small, so call shares "who shows
+up" and win rates hints. Where local and big disagree, that's the useful
+part: a deck that's popular locally but weak at big events, or one that
+wins big events but nobody near you plays it yet. `pods.py --local` or
+`--big` makes "face the top meta" use that lens.
+
 Reading it well matters more than printing it:
 - **Win rates are four-player numbers.** About 25% is average, and lower once
   draws are counted. The report prints the window's observed average. A 30%

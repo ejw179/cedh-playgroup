@@ -17,7 +17,8 @@ import math
 import random
 from collections import defaultdict
 
-from analyze import BASELINE, Profiler, meta, practice_stats, short, tournaments
+from analyze import (BASELINE, Profiler, area_label, big_min, meta, practice_stats, resolve_area, short,
+                     tournaments)
 from common import ATTRIBUTION, die, find_player, load, match_commander
 
 
@@ -66,7 +67,11 @@ class Model:
             if p["name"] not in drop and p not in self.players:
                 self.players.append(p)
 
-        ts = tournaments(a.days, a.min_players)
+        # "top meta" can be the local scene (--local / --zip); matchups and seats stay global for sample size
+        self.area = resolve_area(a)
+        floor = a.min_players if a.min_players is not None else (big_min() if a.big else 0 if self.area else 16)
+        self.meta_label = (f"big events ({floor}+ players)" if a.big and not self.area else area_label(self.area))
+        ts = tournaments(a.days, floor, area=self.area)
         m = meta(ts)["commanders"]
         top = sorted(m.items(), key=lambda kv: -kv[1]["entries"])[: a.top_meta]
         self.meta_rank = {c: i + 1 for i, (c, _) in enumerate(top)}
@@ -93,7 +98,7 @@ class Model:
             self.strength[p["name"]] = smooth(w + pw, g + pg)
 
         # per-player evidence: seats and matchups from their own tables + practice
-        self.prof = Profiler(a.days, a.min_players)
+        self.prof = Profiler(a.days, 16)  # field matchups: global 16+ events, for sample size
         self.by_name = {p["name"]: p for p in self.players}
         self.profiles = {p["name"]: self.prof.profile(p) for p in self.players}
         self.seats = {n: pf["seats"] for n, pf in self.profiles.items()}
@@ -271,7 +276,10 @@ def main():
     ap.add_argument("--w-meta", type=float, default=1.0); ap.add_argument("--w-balance", type=float, default=1.0)
     ap.add_argument("--w-repeat", type=float, default=1.0); ap.add_argument("--w-matchup", type=float, default=1.0)
     ap.add_argument("--top-meta", type=int, default=15); ap.add_argument("--days", type=int, default=30)
-    ap.add_argument("--min-players", type=int, default=16)
+    ap.add_argument("--min-players", type=int, default=None)
+    ap.add_argument("--local", action="store_true", help="use the home area's meta for 'face the top meta'")
+    ap.add_argument("--zip"); ap.add_argument("--miles", type=float)
+    ap.add_argument("--big", action="store_true", help="use the big-event meta for 'face the top meta'")
     ap.add_argument("--seed", type=int, default=1); ap.add_argument("--restarts", type=int, default=25)
     ap.add_argument("--iterations", type=int, default=400); ap.add_argument("--json", action="store_true")
     ap.add_argument("--seat-mode", choices=["practice", "best", "random"], default="practice",
@@ -320,7 +328,7 @@ def main():
         return
     print("Seat = turn order. Field win rate by seat: "
           + ", ".join(f"{i + 1}: {f * 100:.1f}%" for i, f in enumerate(m.prof.field_seats))
-          + f". Seating mode: {a.seat_mode}.\n")
+          + f". Seating mode: {a.seat_mode}. Meta used for 'face the top meta': {m.meta_label}.\n")
     for p in result["pods"]:
         print(f"### Pod {p['pod']} (strength {p['strength']:.3f})")
         for s in p["seats"]:
