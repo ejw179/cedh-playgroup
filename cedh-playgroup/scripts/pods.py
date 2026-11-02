@@ -74,6 +74,7 @@ class Model:
         self.meta_label = (f"big events ({floor}+ players)" if a.big and not self.area else area_label(self.area))
         ts = tournaments(a.days, floor, area=self.area)
         m = meta(ts)["commanders"]
+        self.meta_rows = m
         top = sorted(m.items(), key=lambda kv: -kv[1]["entries"])[: a.top_meta]
         self.meta_rank = {c: i + 1 for i, (c, _) in enumerate(top)}
         self.share = {c: r["share"] for c, r in top}
@@ -121,7 +122,17 @@ class Model:
             p = find_player(roster, who)
             if not p:
                 die(f"--deck: {who} is not on the roster")
-            forced[p["name"]] = match_commander(c)[0]
+            mine = [d["commander"] for d in p.get("decks", []) + p.get("practice_decks", [])]
+            forced[p["name"]] = match_commander(c, mine)[0]
+        # fix-a-matchup targets: "Player=Commander" -> that deck should sit at their table
+        self.fix = {}
+        for f in getattr(a, "fix", None) or []:
+            who, c = f.split("=", 1)
+            p = find_player(roster, who)
+            if not p:
+                die(f"--fix: {who} is not on the roster")
+            self.fix[p["name"]] = match_commander(c)[0]
+        pool = getattr(a, "deck_pool", "all")
         gauntlet = [d["commander"] for d in roster.get("gauntlet_decks", [])]
         self.options = {}
         self.decklist = {}
@@ -130,20 +141,40 @@ class Model:
             practice = [d["commander"] for d in p.get("practice_decks", [])]
             rest = [d["commander"] for d in sorted(p.get("decks", []), key=lambda d: not d.get("primary"))]
             own = practice + [c for c in rest if c not in practice]
+            if pool == "practice" and practice:
+                own = practice  # scenarios play from the player's 1-3 practice decks
+            elif pool == "practice":
+                own = rest[:3]
             self.decklist[p["name"]] = {d["commander"]: d["list"] for d in p.get("decks", []) + p.get("practice_decks", [])
                                         if d.get("list")}
             if p["name"] in forced:
                 opts = [(forced[p["name"]], "own")]
             else:
-                opts = [(c, "own") for c in own] + ([(c, "gauntlet") for c in gauntlet] if p.get("gauntlet_pilot") else [])
-            if not opts:
-                opts = [("(deck not recorded)", "own")]
+                pilots = p.get("gauntlet_pilot") and (pool == "all" or self.fix)
+                opts = [(c, "own") for c in own] + ([(c, "gauntlet") for c in gauntlet] if pilots else [])
+                if not opts:
+                    opts = [("(deck not recorded)", "own")]
+                if getattr(a, "first_deck", False) or p["name"].lower() in {x.lower() for x in getattr(a, "first_deck_for", [])}:
+                    opts = opts[:1]  # "#1 deck" scenarios
             self.options[p["name"]] = opts
         self.primary = {p["name"]: self.options[p["name"]][0][0] for p in self.players}
         # 0 = primary, 1 = second deck, ...; gauntlet decks count as 1 (a fair ask of a pilot)
+        # big-event scenario: each player brings whichever of their decks does best at big events
+        if getattr(a, "best_meta_deck", False):
+            for n, opts in self.options.items():
+                if n not in forced and len(opts) > 1:
+                    self.options[n] = [max(opts, key=lambda o: self.deck_wr.get(o[0], BASELINE))]
         self.deck_rank = {n: {c: (i if kind == "own" else 1) for i, (c, kind) in enumerate(opts)}
                           for n, opts in self.options.items()}
         self.focus = {f.lower() for f in (a.focus or [])}
+        # fixed seats: "Player=N" (turn order within their pod)
+        self.fixed_seat = {}
+        for f in getattr(a, "seat", None) or []:
+            who, n = f.split("=", 1)
+            p = find_player(roster, who)
+            if not p or not n.strip().isdigit():
+                die(f"--seat: expected Player=N, got {f!r}")
+            self.fixed_seat[p["name"]] = int(n) - 1
 
     def weakness(self, player, mine, theirs):
         """How badly `player` does on `mine` against `theirs`, with the evidence
@@ -162,17 +193,26 @@ class Model:
         their record is weakest relative to that seat's normal win rate;
         'best' rehearses their strongest seats; 'random' just shuffles."""
         mode = self.a.seat_mode
+
+        def allowed(perm):  # respect "Player=N" fixed seats where the pod is big enough
+            return all(perm[i] == n for n, i in self.fixed_seat.items() if n in perm and i < len(perm))
+
         if mode == "random":
-            order = pod[:]; rng.shuffle(order); return order
+            perms = [p for p in itertools.permutations(pod) if allowed(p)] or [tuple(pod)]
+            return list(rng.choice(perms))
 
         def val(n, i):
             s = self.seats[n][i]
             conf = min(1.0, s["games"] / 6)
-            mult = 4.0 if n.lower() in self.focus else 1.0
+            focused = n.lower() in self.focus
+            if mode == "focus":  # only the focus player's seat matters; everyone else fits around them
+                return -s["vs_field"] * conf if focused else 0.0
+            mult = 4.0 if focused else 1.0
             v = -s["vs_field"] if mode == "practice" else s["vs_field"]
             return v * conf * mult
 
-        best = max(itertools.permutations(pod), key=lambda perm: (sum(val(n, i) for i, n in enumerate(perm)), rng.random()))
+        perms = [p for p in itertools.permutations(pod) if allowed(p)] or list(itertools.permutations(pod))
+        best = max(perms, key=lambda perm: (sum(val(n, i) for i, n in enumerate(perm)), rng.random()))
         return list(best)
 
     def score(self, pods, decks, explain=False):
@@ -199,10 +239,17 @@ class Model:
                         total -= a.w_repeat * t * 0.5
                         if t >= 0.8:
                             pn["repeats"].append(f"{pod[i]} & {pod[j]} (recency-weighted {t:.1f})")
+            # fix-a-matchup: the target deck must be at that player's table
+            for n, target in self.fix.items():
+                if n in pod:
+                    if any(decks[o][0] == target for o in pod if o != n):
+                        total += 25
+                    elif explain:
+                        pn["warnings"].append(f"couldn't seat {target} with {n}: nobody here brings it")
             # weak matchups
             for n in pod:
                 mine = decks[n][0]
-                mult = 4.0 if n.lower() in self.focus else 1.0
+                mult = 4.0 if n.lower() in self.focus else (0.0 if getattr(a, "focus_only", False) else 1.0)
                 for o in pod:
                     if o == n:
                         continue
@@ -244,6 +291,16 @@ class Model:
             # sit out whoever has played the most logged practice games
             bench = sorted(names, key=lambda n: -(self.prac.get(n, {}) or {}).get("games", 0))[:bench_n]
             names = [n for n in names if n not in bench]
+        if getattr(self.a, "random_all", False):
+            # random pods, and a random deck from each player's options (seats are shuffled in seat_order)
+            order = names[:]
+            rng.shuffle(order)
+            pods, i = [], 0
+            for sz in sizes:
+                pods.append(order[i:i + sz]); i += sz
+            decks = {n: rng.choice(self.options[n]) for n in names}
+            _, notes = self.score(pods, decks, explain=True)
+            return pods, decks, notes, bench
         best = None
         for _ in range(self.a.restarts):
             order = names[:]
@@ -289,15 +346,123 @@ def parser():
     ap.add_argument("--big", action="store_true", help="use the big-event meta for 'face the top meta'")
     ap.add_argument("--seed", type=int, default=1); ap.add_argument("--restarts", type=int, default=25)
     ap.add_argument("--iterations", type=int, default=400); ap.add_argument("--json", action="store_true")
-    ap.add_argument("--seat-mode", choices=["practice", "best", "random"], default="practice",
+    ap.add_argument("--seat-mode", choices=["practice", "best", "random", "focus"], default="practice",
                     help="practice: seat players where they're weakest; best: rehearse best seats")
     ap.add_argument("--save", action="store_true", help="lock in this seating for --date (shown on the site)")
+    ap.add_argument("--scenario", choices=list(SCENARIOS), help="a preset reason for the pods (see SCENARIOS)")
+    ap.add_argument("--fix", action="append", metavar="PLAYER=CMDR", help="put that deck at the player's table")
+    ap.add_argument("--seat", action="append", metavar="PLAYER=N", help="fix a player's seat (turn order)")
+    ap.add_argument("--manual", help='generic practice: JSON pods, e.g. [[{"player":"Eric","commander":"Kinnan"},...]]')
     return ap
 
 
-def plan(a) -> tuple["Model", dict]:
+# The reasons a session can be built for. Each sets the deck pool, seat mode and goal weights.
+SCENARIOS = {
+    "improve": "Improve one player",
+    "worst_seat": "Worst-seat practice",
+    "rehearsal": "Tournament rehearsal",
+    "local": "Face the local meta",
+    "big": "Face big-event meta",
+    "fix": "Fix a matchup",
+    "specific": "Specific deck and seat",
+    "generic": "Generic practice",
+    "random": "Random",
+}
+
+
+def apply_scenario(a) -> None:
+    """Translate --scenario into the builder's knobs. Explicit flags still win where they're set."""
+    s = a.scenario
+    if not s:
+        return
+    a.deck_pool = "practice"
+    if s == "improve":
+        if not a.focus:
+            die("improve: pick the player with --focus")
+        a.focus = a.focus[:1]
+        a.seat_mode, a.focus_only = "focus", True  # their worst seat, their weak matchups; others fit around
+        a.first_deck_for = a.focus
+        a.w_meta, a.w_balance, a.w_repeat, a.w_matchup = 0.3, 0.3, 0.3, 2.0
+    elif s == "worst_seat":
+        a.seat_mode, a.first_deck = "practice", True
+        a.w_meta = 0.5
+    elif s == "rehearsal":
+        # everyone on their #1 deck in their best seat; pods as even as possible so anyone can win
+        a.seat_mode, a.first_deck = "best", True
+        a.w_balance, a.w_matchup, a.w_meta, a.w_repeat = 3.0, 0.0, 0.0, 0.5
+    elif s == "local":
+        a.local, a.seat_mode = True, "practice"
+        a.w_meta, a.w_matchup = 3.0, 0.3
+    elif s == "big":
+        a.big, a.seat_mode, a.best_meta_deck = True, "practice", True
+        a.w_meta = 1.0
+    elif s == "fix":
+        if not a.fix:
+            die("fix: say whose matchup with --fix PLAYER=CMDR")
+        a.deck_pool = "all"  # the target may be someone's non-practice deck or a gauntlet deck
+        a.focus = [f.split("=", 1)[0] for f in a.fix]
+        a.seat_mode, a.w_meta = "practice", 0.3
+    elif s == "specific":
+        a.seat_mode = "practice"
+    elif s == "random":
+        a.seat_mode, a.random_all = "random", True
+
+
+def meta_gaps(m: "Model", roster: dict, top_n: int = 12) -> dict:
+    """Top decks in this scenario's meta that nobody in the group brings (practice decks, decks or gauntlet)."""
+    group = {d["commander"] for p in roster["players"] for d in p.get("decks", []) + p.get("practice_decks", [])}
+    group |= {d["commander"] for d in roster.get("gauntlet_decks", [])}
+    rows = sorted(m.meta_rows.items(), key=lambda kv: -kv[1]["entries"])[:top_n]
+    missing = []
+    for c, r in rows:
+        if c in group:
+            continue
+        strong = (r["win_rate"] or 0) >= m.base and (r["conversion"] or 0) >= 0.25
+        missing.append({"commander": c, "share": round(r["share"], 3), "win_rate": r["win_rate"] and round(r["win_rate"], 3),
+                        "top_cut_rate": r["conversion"] and round(r["conversion"], 3), "major": strong})
+    covered = [c for c, _ in rows if c in group]
+    return {"lens": m.meta_label, "missing": missing, "covered": covered, "top_n": top_n}
+
+
+def manual_plan(a) -> dict:
+    """Generic practice: the group picks pods, seats and decks; no analysis."""
+    roster = load("roster.json")
+    try:
+        pods_in = json.loads(a.manual)
+    except json.JSONDecodeError as e:
+        die(f"--manual isn't valid JSON: {e}")
+    pods, seen = [], set()
+    for i, pod in enumerate(pods_in, 1):
+        seats = []
+        for k, s in enumerate(pod, 1):
+            p = find_player(roster, str(s.get("player", "")))
+            if not p:
+                die(f"--manual: unknown player {s.get('player')!r}")
+            if p["name"] in seen:
+                die(f"--manual: {p['name']} is in two seats")
+            seen.add(p["name"])
+            mine = [d["commander"] for d in p.get("decks", []) + p.get("practice_decks", [])]
+            cmdr = match_commander(str(s.get("commander") or ""), mine)[0] if s.get("commander") else "(deck not recorded)"
+            lists = {d["commander"]: d.get("list") for d in p.get("decks", []) + p.get("practice_decks", []) if d.get("list")}
+            seats.append({"seat": k, "player": p["name"], "commander": cmdr, "gauntlet": False,
+                          "decklist": lists.get(cmdr, ""), "evidence": {"tournament_games": 0, "practice_games": 0},
+                          "seat_read": "", "seat_record": "", "seat_vs_field": 0, "seat_expected": 0,
+                          "matchups_here": [], "needs_practice_elsewhere": [], "practice_rank": None, "takeaway": None})
+        if not 3 <= len(seats) <= 5:
+            die(f"--manual: pod {i} needs 3 to 5 players")
+        pods.append({"pod": i, "seats": seats, "strength": None, "meta_decks": [], "repeat_pairings": [], "warnings": []})
+    return {"field_seats": [], "seat_mode": "manual", "pods": pods, "bench": [], "meta_label": "",
+            "analysis": False, "attribution": ATTRIBUTION}
+
+
+def plan(a) -> tuple["Model | None", dict]:
     """Build pods for parsed args `a`; returns the model and the JSON-able result.
     Used by main() and by build_site.py."""
+    if a.scenario == "generic" or a.manual:
+        result = manual_plan(a)
+        result["scenario"] = {"id": "generic", "label": SCENARIOS["generic"]}
+        return None, result
+    apply_scenario(a)
     m = Model(a)
     pods, decks, notes, bench = m.solve()
     games = load("games.json")["games"]
@@ -341,6 +506,13 @@ def plan(a) -> tuple["Model", dict]:
             "pod": i, "seats": seats, "strength": round(pn["strength"], 3), "meta_decks": pn["meta"],
             "repeat_pairings": pn["repeats"], "warnings": pn["warnings"]})
     result["meta_label"] = m.meta_label
+    sc = a.scenario or "custom"
+    result["scenario"] = {"id": sc, "label": SCENARIOS.get(sc, "Custom"),
+                          "focus": [p["name"] for p in m.players if p["name"].lower() in m.focus],
+                          "fix": [{"player": k, "commander": v} for k, v in m.fix.items()]}
+    result["analysis"] = sc != "random"
+    if sc in ("local", "big"):
+        result["gaps"] = meta_gaps(m, load("roster.json"))
     return m, result
 
 
@@ -364,9 +536,20 @@ def main():
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return
     bench = result["bench"]
+    print(f"Scenario: {result['scenario']['label']}")
+    if m is None:  # generic practice: just the seating the group chose
+        for p in result["pods"]:
+            print(f"### Pod {p['pod']}: " + ", ".join(f"{s['seat']}. {s['player']} ({short(s['commander'])})"
+                                                      for s in p["seats"]))
+        return
     print("Seat = turn order. Field win rate by seat: "
           + ", ".join(f"{i + 1}: {f * 100:.1f}%" for i, f in enumerate(m.prof.field_seats))
           + f". Seating mode: {a.seat_mode}. Meta used for 'face the top meta': {m.meta_label}.\n")
+    if result.get("gaps"):
+        g = result["gaps"]
+        print(f"Gaps vs {g['lens']} (top {g['top_n']} decks nobody in the group brings): "
+              + ("; ".join(f"{short(x['commander'])} {x['share'] * 100:.1f}%" + (" [MAJOR]" if x["major"] else "")
+                           for x in g["missing"]) or "none") + "\n")
     for p in result["pods"]:
         print(f"### Pod {p['pod']} (strength {p['strength']:.3f})")
         for s in p["seats"]:

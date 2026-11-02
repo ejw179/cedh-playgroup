@@ -38,6 +38,10 @@ def args_for(req: dict, roster: dict, has_home: bool) -> tuple[list[str] | None,
             names.append(pl["name"])
     if len(names) < 3:
         return None, {}, "needs at least 3 players"
+    scenario = str(p.get("scenario") or "")
+    if scenario:
+        return scenario_args(p, day, names, scenario, roster)
+    # older requests: seats + meta lens
     seats = SEATS.get(str(p.get("seats") or "practice"))
     lens = str(p.get("meta") or "local")
     if not seats or lens not in META:
@@ -56,6 +60,56 @@ def args_for(req: dict, roster: dict, has_home: bool) -> tuple[list[str] | None,
             focus.append(pl["name"])
             argv += ["--focus", pl["name"]]
     return argv, {"players": names, "focus": focus, "seats": seats, "meta": lens}, ""
+
+
+def scenario_args(p: dict, day: str, names: list[str], scenario: str, roster: dict):
+    """A request built around one of pods.SCENARIOS, with per-player choices."""
+    if scenario not in podmod.SCENARIOS:
+        return None, {}, f"unknown scenario {scenario!r}"
+    argv = ["--date", day, "--players", *names, "--scenario", scenario, "--json"]
+    info = {"players": names, "scenario": scenario}
+
+    def player(n):
+        pl = find_player(roster, str(n or ""))
+        return pl["name"] if pl and pl["name"] in names else None
+
+    # per-player choices: {player, commander?, seat?, pod?}
+    picks = []
+    for c in p.get("assign") or []:
+        who = player(c.get("player"))
+        if who:
+            seat = str(c.get("seat") or "")
+            pod = str(c.get("pod") or "")
+            picks.append({"player": who, "commander": str(c.get("commander") or "").strip(),
+                          "seat": int(seat) if seat.isdigit() else None, "pod": int(pod) if pod.isdigit() else None})
+    if scenario == "improve":
+        who = player(p.get("player"))
+        if not who:
+            return None, {}, "improve: pick the player to focus on"
+        argv += ["--focus", who]
+        info["focus"] = [who]
+    elif scenario == "fix":
+        who, target = player(p.get("player")), str(p.get("target") or "").strip()
+        if not who or not target:
+            return None, {}, "fix: pick the player and the deck to face"
+        argv += ["--fix", f"{who}={target}"]
+        info["fix"] = {"player": who, "commander": target}
+    elif scenario == "generic":
+        # the group picks everything: pod, seat and deck for every player
+        if len(picks) != len(names) or any(x["pod"] is None or x["seat"] is None or not x["commander"] for x in picks):
+            return None, {}, "generic: every player needs a pod, a seat and a deck"
+        pods = {}
+        for x in sorted(picks, key=lambda x: (x["pod"], x["seat"])):
+            pods.setdefault(x["pod"], []).append({"player": x["player"], "commander": x["commander"]})
+        argv = ["--date", day, "--scenario", "generic", "--json",
+                "--manual", json.dumps([pods[k] for k in sorted(pods)])]
+        return argv, info, ""
+    for x in picks:  # "specific" (and any scenario): honour a chosen deck and/or seat
+        if x["commander"]:
+            argv += ["--deck", f"{x['player']}={x['commander']}"]
+        if x["seat"]:
+            argv += ["--seat", f"{x['player']}={x['seat']}"]
+    return argv, info, ""
 
 
 def main():
@@ -98,11 +152,11 @@ def main():
         except SystemExit as e:
             print(f"Skipped session request {req['id']}: pod builder stopped ({e})")
             continue
-        saved = load("pods.json") | {"planned_requests": saved["planned_requests"]}
         saved["sessions"][p["date"]] = {
             **result, "date": p["date"], "saved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "requested_by": str(p.get("reporter") or "")[:60],
-            "scenario": {"seats": info["seats"], "meta": info["meta"], "focus": info["focus"]},
+            "scenario": result.get("scenario") if "scenario" in info else
+            {"id": "custom", "label": "Custom", "seats": info["seats"], "meta": info["meta"], "focus": info["focus"]},
         }
         planned += 1
         print(f"Planned {p['date']}: " + " | ".join(

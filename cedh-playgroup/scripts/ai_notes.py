@@ -32,7 +32,7 @@ How to read the numbers:
 What to write:
 - meta: 3-4 bullets per lens. Name what's rising, what over- or under-performs its popularity, and what the group (the "played_by" field) is or isn't ready for. Point out where local and big events disagree. No restating the table row by row.
 - players: one note per player, in the roster order given. Tie their takeaways to their numbers (seats, matchups, form) and end with one concrete next step for the next practice night: a deck to face, a seat to practise, or a practice deck to play. If a player has no data, say what to report next.
-- pods: one briefing per pod in the saved session (if any): what the table is for and one thing to watch for each player, in 2-3 sentences.
+- pods: one briefing per pod in the saved session (if any): what the table is for under the session's scenario (e.g. one player's improvement, worst-seat practice, tournament rehearsal, facing the local or big-event meta, fixing a matchup) and one thing to watch for each player, in 2-3 sentences. If the scenario lists gaps vs the meta, name the biggest one the group should get a gauntlet deck for.
 
 Rules:
 - Use only the numbers and names provided. Never invent results, cards, events or players.
@@ -145,10 +145,16 @@ def context() -> dict:
         })
 
     sessions = load("pods.json")["sessions"]
-    upcoming = sorted(d for d in sessions if d >= date.today().isoformat())
-    day = upcoming[0] if upcoming else (sorted(sessions)[-1] if sessions else None)
-    pods = []
+    # the next session that has analysis (generic and random sessions are just played and reported)
+    upcoming = sorted(d for d in sessions if d >= date.today().isoformat() and sessions[d].get("analysis", True))
+    day = upcoming[0] if upcoming else None
+    pods, scenario = [], None
     if day:
+        sc = sessions[day].get("scenario") or {}
+        scenario = {"name": sc.get("label") or "Worst-seat practice", "focus": sc.get("focus", []),
+                    "fix": [f"{x['player']} vs {short(x['commander'])}" for x in sc.get("fix", [])],
+                    "gaps_vs_meta": [{"deck": short(x["commander"]), "share": pct(x["share"]), "major": x["major"]}
+                                     for x in (sessions[day].get("gaps") or {}).get("missing", [])]}
         for pod in sessions[day]["pods"]:
             pods.append({"pod": pod["pod"], "seats": [
                 {"seat": s["seat"], "player": s["player"], "deck": short(s["commander"]),
@@ -159,7 +165,8 @@ def context() -> dict:
     recent = [{"date": g["date"], "pod": g.get("pod"), "turn_order": [f"{s['player']} ({short(s['commander'])})"
                                                                          for s in g["seats"]],
                "winner": g["winner"] or "draw"} for g in games[-12:]]
-    return {"lenses": lenses, "players": players, "session": day, "pods": pods, "recent_practice_games": recent}
+    return {"lenses": lenses, "players": players, "session": day, "session_scenario": scenario, "pods": pods,
+            "recent_practice_games": recent}
 
 
 def validate(notes: dict, ctx: dict) -> list[str]:

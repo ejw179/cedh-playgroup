@@ -389,6 +389,33 @@ every commander seen on TopDeck) and optional decklist links. The import job
 applies it to the roster (`import_results.py`, latest request per player
 wins; an empty set clears them).
 
+### Scenarios: the reason for the pods
+
+Every session is built for a reason. `pods.py --scenario NAME` (or the site's
+picker) sets everything else. Scenarios play from each player's 1–3 practice
+decks, or their recorded decks if they haven't set any:
+
+| Scenario | Flag | What it builds |
+|---|---|---|
+| Improve one player | `improve --focus P` | P in their worst seat on their #1 deck, at a table of the decks they do worst against; others built around P |
+| Worst-seat practice | `worst_seat` | Everyone on #1, in the seat where their record is weakest vs that seat's average |
+| Tournament rehearsal | `rehearsal` | Everyone on #1 in their best seat; pods as even as possible |
+| Face the local meta | `local` | Deck choices that put the most of the local meta at the tables; **gaps** called out |
+| Face big-event meta | `big` | Each player's best big-event deck, worst seats; **major gaps** called out |
+| Fix a matchup | `fix --fix P=CMDR` | That deck (someone's deck or a gauntlet deck) at P's table |
+| Specific deck and seat | `specific --deck P=CMDR --seat P=N` | Locks what you choose; the rest is automatic |
+| Generic practice | `generic --manual '[[{"player":..,"commander":..},..]]'` | Exactly the seating given; no analysis |
+| Random | `random` | Random pods, seats, and decks from each player's 1–3 |
+
+When explaining gaps, name the strongest missing deck and suggest a gauntlet
+copy (`playgroup.py gauntlet-deck add`). Generic and random sessions get no
+"why" and no Claude briefing. Don't add reasons to them.
+
+**Where finished pods go:** the site's **History** section archives every
+past session with its scenario, seating, each pod's results, notes and
+decklists, plus practice standings. A pod shows **complete** once a result is
+reported.
+
 ### Planning a session on the site
 
 The site's **Plan a session** form (top of *Next session*) lets anyone with
