@@ -36,14 +36,17 @@ def to_game(sub: dict, roster: dict) -> tuple[dict | None, str]:
         return None, "needs 3 to 5 seats"
     seats, notes, lists = [], {}, {}
     for s in seats_in:
-        pl = find_player(roster, str(s.get("player", "")))
-        if not pl:
+        name = " ".join(str(s.get("player") or "").split())[:40]
+        pl = find_player(roster, name) if name else None
+        if not pl and not (s.get("guest") and name):
             return None, f"unknown player {s.get('player')!r}"
+        pl = pl or {"name": name, "guest": True}  # a random / guest seated in a manual pod
         mine = [d["commander"] for d in pl.get("decks", []) + pl.get("practice_decks", [])]
         cmdr = str(s.get("commander") or "").strip()
         if not cmdr:
             return None, f"no deck for {pl['name']}"
-        seats.append({"player": pl["name"], "commander": match_commander(cmdr, mine)[0]})
+        seats.append({"player": pl["name"], "commander": match_commander(cmdr, mine)[0],
+                      **({"guest": True} if pl.get("guest") else {})})
         note = " ".join(str(s.get("note") or "").split())[:MAX_NOTE]
         if note:
             notes[pl["name"]] = note
@@ -114,6 +117,8 @@ def main():
         # remember decklists on the roster when a deck didn't have one yet
         for name, url in game.get("decklists", {}).items():
             pl = find_player(roster, name)
+            if not pl:
+                continue  # guests have no roster decks
             cmdr = next(s["commander"] for s in game["seats"] if s["player"] == name)
             for d in pl.get("decks", []):
                 if d["commander"] == cmdr and not d.get("list"):

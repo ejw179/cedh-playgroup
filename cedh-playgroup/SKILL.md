@@ -404,11 +404,11 @@ decks, or their recorded decks if they haven't set any:
 | Face big-event meta | `big` | Each player's best big-event deck, worst seats; **major gaps** called out |
 | Fix a matchup | `fix --fix P=CMDR` | That deck (someone's deck or a gauntlet deck) at P's table |
 | Specific deck and seat | `specific --deck P=CMDR --seat P=N` | Locks what you choose; the rest is automatic |
-| Generic practice | `generic --manual '[[{"player":..,"commander":..},..]]'` | Exactly the seating given; no analysis |
+| Build pods manually | `generic --manual '[[{"player":..,"commander":..},{"player":"Sam","guest":true,"commander":..},..]]'` | Exactly the seating given, seat 1 first; randoms (`"guest": true`, anyone not on the roster) allowed; no analysis |
 | Random | `random` | Random pods, seats, and decks from each player's 1–3 |
 
 When explaining gaps, name the strongest missing deck and suggest a gauntlet
-copy (`playgroup.py gauntlet-deck add`). Generic and random sessions get no
+copy (`playgroup.py gauntlet-deck add`). Manual and random sessions get no
 "why" and no Claude briefing. Don't add reasons to them.
 
 **Where finished pods go:** the site's **History** section archives every

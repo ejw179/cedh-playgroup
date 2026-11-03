@@ -352,7 +352,7 @@ def parser():
     ap.add_argument("--scenario", choices=list(SCENARIOS), help="a preset reason for the pods (see SCENARIOS)")
     ap.add_argument("--fix", action="append", metavar="PLAYER=CMDR", help="put that deck at the player's table")
     ap.add_argument("--seat", action="append", metavar="PLAYER=N", help="fix a player's seat (turn order)")
-    ap.add_argument("--manual", help='generic practice: JSON pods, e.g. [[{"player":"Eric","commander":"Kinnan"},...]]')
+    ap.add_argument("--manual", help='pods built by hand: JSON pods in seat order, e.g. [[{"player":"Eric","commander":"Kinnan"},{"player":"Sam","guest":true,"commander":"Tymna"},...]]')
     return ap
 
 
@@ -365,7 +365,7 @@ SCENARIOS = {
     "big": "Face big-event meta",
     "fix": "Fix a matchup",
     "specific": "Specific deck and seat",
-    "generic": "Generic practice",
+    "generic": "Build pods manually",
     "random": "Random",
 }
 
@@ -425,7 +425,7 @@ def meta_gaps(m: "Model", roster: dict, top_n: int = 12) -> dict:
 
 
 def manual_plan(a) -> dict:
-    """Generic practice: the group picks pods, seats and decks; no analysis."""
+    """Pods built by hand: the group picks every seat's player (roster or a random/guest) and deck; no analysis."""
     roster = load("roster.json")
     try:
         pods_in = json.loads(a.manual)
@@ -435,9 +435,12 @@ def manual_plan(a) -> dict:
     for i, pod in enumerate(pods_in, 1):
         seats = []
         for k, s in enumerate(pod, 1):
-            p = find_player(roster, str(s.get("player", "")))
-            if not p:
+            name = " ".join(str(s.get("player") or "").split())[:40]
+            p = find_player(roster, name) if name else None
+            if not p and not s.get("guest"):
                 die(f"--manual: unknown player {s.get('player')!r}")
+            if not p:  # a random / guest who isn't on the roster
+                p = {"name": name or f"Random {sum(1 for x in seen if x.startswith('Random')) + 1}", "guest": True}
             if p["name"] in seen:
                 die(f"--manual: {p['name']} is in two seats")
             seen.add(p["name"])
@@ -445,6 +448,7 @@ def manual_plan(a) -> dict:
             cmdr = match_commander(str(s.get("commander") or ""), mine)[0] if s.get("commander") else "(deck not recorded)"
             lists = {d["commander"]: d.get("list") for d in p.get("decks", []) + p.get("practice_decks", []) if d.get("list")}
             seats.append({"seat": k, "player": p["name"], "commander": cmdr, "gauntlet": False,
+                          **({"guest": True} if p.get("guest") else {}),
                           "decklist": lists.get(cmdr, ""), "evidence": {"tournament_games": 0, "practice_games": 0},
                           "seat_read": "", "seat_record": "", "seat_vs_field": 0, "seat_expected": 0,
                           "matchups_here": [], "needs_practice_elsewhere": [], "practice_rank": None, "takeaway": None})

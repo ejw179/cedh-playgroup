@@ -34,7 +34,7 @@ SCENARIO_HELP = {
     "big": "Each player brings whichever of their decks does best at big events, from their worst seat.",
     "fix": "Puts a chosen deck at one player's table so they can work on that matchup.",
     "specific": "You set a deck and/or seat for anyone; the builder fills in the rest.",
-    "generic": "You pick pods, seats and decks. Just play and report, no analysis.",
+    "generic": "Seat it yourself: known players and randoms, each seat's commander. Just play and report, no analysis.",
     "random": "Random pods, random seats, a random deck from each player's 1–3.",
 }
 
@@ -225,7 +225,8 @@ def report_form(day: str, pod: dict, results_url: str) -> str:
     if not results_url:
         return ""
     seats = "".join(
-        f'<fieldset class="rf-seat" data-player="{e(s["player"])}"><legend>{s["seat"]}. {e(s["player"])}</legend>'
+        f'<fieldset class="rf-seat" data-player="{e(s["player"])}"{" data-guest=1" if s.get("guest") else ""}>'
+        f'<legend>{s["seat"]}. {e(s["player"])}{" (random)" if s.get("guest") else ""}</legend>'
         f'<div class="two"><label>Deck <input name="commander" value="{e(s["commander"])}" required></label>'
         f'<label>Decklist link <input name="decklist" type="url" placeholder="https://moxfield.com/decks/…" '
         f'value="{e(s.get("decklist") or "")}"></label></div>'
@@ -260,13 +261,13 @@ def plan_form(roster: dict, results_url: str) -> str:
         f'<span><strong>{e(v)}</strong><span class="muted small">{e(SCENARIO_HELP[k])}</span></span></label>'
         for k, v in podmod.SCENARIOS.items())
     pick = "".join(f'<option value="{e(n)}">{e(n)}</option>' for n in names)
+    own = {p["name"]: list(dict.fromkeys(d["commander"] for d in p.get("practice_decks", []) + p.get("decks", [])))
+           for p in roster["players"]}
     rows = "".join(
         f'<div class="as-row" data-player="{e(p["name"])}" '
         f'data-own="{e(json.dumps([d["commander"] for d in p.get("practice_decks", []) + p.get("decks", [])]))}" hidden>'
         f'<span class="as-name">{e(p["name"])}</span>'
         f'<select name="as-deck" aria-label="{e(p["name"])} deck"></select>'
-        f'<select name="as-pod" aria-label="{e(p["name"])} pod" class="gen-only"><option value="">Pod</option>'
-        + "".join(f'<option value="{i}">Pod {i}</option>' for i in (1, 2, 3)) + '</select>'
         f'<select name="as-seat" aria-label="{e(p["name"])} seat"><option value="">Seat: any</option>'
         + "".join(f'<option value="{i}">Seat {i}</option>' for i in (1, 2, 3, 4)) + '</select></div>'
         for p in roster["players"])
@@ -274,15 +275,18 @@ def plan_form(roster: dict, results_url: str) -> str:
             f'<form class="form pf">'
             f'<div class="two"><label>Date <input name="date" type="date" required></label>'
             f'<label>Your name <input name="reporter" maxlength="60"></label></div>'
-            f'<div class="field"><span class="label">Who’s playing (3 or more)</span><div class="chips">{boxes}</div></div>'
             f'<div class="field"><span class="label">Reason for the pods</span><div class="scns">{cards}</div></div>'
+            f'<div class="field not-manual"><span class="label">Who’s playing (3 or more)</span><div class="chips">{boxes}</div></div>'
+            f'<div class="field opt" data-for="generic"><span class="label">Your pods, seat 1 first. Pick a known player '
+            f'or <em>Random…</em> (type their name), and their commander.</span>'
+            f'<div class="mb" data-own="{e(json.dumps(own))}"></div>'
+            f'<div><button type="button" class="ghost mb-add">+ Add a pod</button></div></div>'
             f'<div class="field opt" data-for="improve fix"><label><span class="opt-improve">Player to improve</span>'
             f'<span class="opt-fix">Whose matchup</span>'
             f'<select name="player"><option value="">Choose a player</option>{pick}</select></label></div>'
             f'<div class="field opt" data-for="fix"><label>Deck they need to face <select name="target"></select></label></div>'
-            f'<div class="field opt" data-for="specific generic"><span class="label">'
-            f'<span class="opt-specific">Optional: lock a deck and/or seat for anyone (the rest is automatic)</span>'
-            f'<span class="opt-generic">Pick a pod, seat and deck for every player</span></span>'
+            f'<div class="field opt" data-for="specific"><span class="label">'
+            f'Optional: lock a deck and/or seat for anyone (the rest is automatic)</span>'
             f'<div class="as">{rows}</div></div>'
             f'<label>Group PIN <input name="pin" type="password" autocomplete="off" required></label>'
             f'<div class="actions"><button type="submit">Build pods</button><span class="status" role="status"></span></div>'
@@ -324,6 +328,8 @@ def pod_card(p: dict, pod: dict, games: list[dict], results_url: str, ai: dict |
             tags += badge(f"fixing vs {short(fix[s['player']])}", "accent")
         if s.get("gauntlet"):
             tags += badge("gauntlet")
+        if s.get("guest"):
+            tags += badge("random")
         if s.get("practice_rank"):
             tags += badge(f"practice #{s['practice_rank']}")
         summary = seat_summary(s) if analysis else ""
@@ -526,7 +532,8 @@ def render_history(games, cfg, ai, past) -> str:
     if games:
         st = practice_stats(games)
         rows = sorted(st.items(), key=lambda kv: (-(kv[1]["wins"] / kv[1]["games"]), -kv[1]["games"]))
-        trs = "".join(f'<tr><td>{e(n)}</td><td class="num">{s["games"]}</td><td class="num">{s["wins"]}</td>'
+        known = {p["name"] for p in load("roster.json")["players"]}
+        trs = "".join(f'<tr><td>{e(n)}{"" if n in known else " " + badge("random")}</td><td class="num">{s["games"]}</td><td class="num">{s["wins"]}</td>'
                       f'<td class="num">{s["draws"]}</td><td class="num">{pct(s["wins"] / s["games"], 0)}</td>'
                       f'<td>{e(", ".join(f"{short(c)} {s["wins_by_commander"][c]}/{k}" for c, k in s["by_commander"].most_common(2)))}</td></tr>'
                       for n, s in rows)
@@ -663,12 +670,18 @@ border-radius:999px;padding:.32rem .75rem;color:var(--ink)!important;font-size:.
 cursor:pointer;background:var(--bg);color:var(--ink)!important}
 .scn input{width:auto!important;margin-top:.2rem}.scn>span{display:grid;gap:2px;font-weight:400}
 .scn:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
-.opt[hidden],.as-row[hidden]{display:none}
-.as{display:grid;gap:6px}.as-row{display:grid;grid-template-columns:90px 1fr auto auto;gap:6px;align-items:center}
+.opt[hidden],.as-row[hidden],.not-manual[hidden],.mb [hidden]{display:none}
+.mb{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr))}
+.mb-pod{border:1px solid var(--line);border-radius:12px;padding:.6rem .7rem;display:grid;gap:6px}
+.mb-head{display:flex;gap:8px;align-items:center}.mb-head strong{flex:1}
+.mb-seats{display:grid;gap:6px}.mb-seat{display:grid;grid-template-columns:24px 1fr 1.4fr;gap:6px;align-items:center}
+.mb-seat input{grid-column:2/-1}
+.as{display:grid;gap:6px}.as-row{display:grid;grid-template-columns:90px 1fr auto;gap:6px;align-items:center}
 .as-name{font-weight:700;font-size:.9rem}@media (max-width:560px){.as-row{grid-template-columns:1fr 1fr}.as-name{grid-column:1/-1}}
 .actions{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap}
 .form button{font:inherit;font-weight:700;background:var(--accent);color:var(--accent-ink);border:0;border-radius:999px;
 padding:.55rem 1.2rem;cursor:pointer}.form button[disabled]{opacity:.6;cursor:default}
+.form button.ghost{background:transparent;color:var(--accent);border:1px solid var(--line);padding:.35rem .8rem;font-size:.85rem}
 .status{font-size:.9rem}.status.ok{color:var(--good)}.status.err{color:var(--bad)}
 .pd-row{display:grid;grid-template-columns:auto 1fr 1fr;gap:6px 8px;align-items:center}
 @media (max-width:520px){.pd-row{grid-template-columns:auto 1fr}.pd-row input{grid-column:2}}
@@ -763,7 +776,7 @@ document.querySelectorAll('form.rf').forEach(function(f){
     var winner = f.querySelector('[name=winner]:checked');
     if (!winner) return bad(f, 'Pick the winner (or Draw).');
     var seats = Array.prototype.map.call(f.querySelectorAll('.rf-seat'), function(fs, i){
-      return { seat: i + 1, player: fs.dataset.player, commander: fs.querySelector('[name=commander]').value.trim(),
+      return { seat: i + 1, player: fs.dataset.player, guest: !!fs.dataset.guest, commander: fs.querySelector('[name=commander]').value.trim(),
                decklist: fs.querySelector('[name=decklist]').value.trim(), note: fs.querySelector('[name=note]').value.trim() };
     });
     send(f, { type: 'result', date: f.dataset.date, pod: Number(f.dataset.pod), winner: winner.value, seats: seats,
@@ -790,14 +803,77 @@ document.querySelectorAll('form.pf').forEach(function(f){
     f.querySelectorAll('.opt').forEach(function(o){ o.hidden = o.dataset.for.split(' ').indexOf(s) < 0; });
     f.querySelectorAll('.opt-improve').forEach(function(x){ x.hidden = s !== 'improve'; });
     f.querySelectorAll('.opt-fix').forEach(function(x){ x.hidden = s !== 'fix'; });
-    f.querySelectorAll('.opt-specific').forEach(function(x){ x.hidden = s !== 'specific'; });
-    f.querySelectorAll('.opt-generic').forEach(function(x){ x.hidden = s !== 'generic'; });
-    f.querySelectorAll('.gen-only').forEach(function(x){ x.hidden = s !== 'generic'; });
+    f.querySelectorAll('.not-manual').forEach(function(x){ x.hidden = s === 'generic'; });
     f.querySelectorAll('.as-row').forEach(function(r){ r.hidden = !chosen[r.dataset.player]; });
+  }
+  // Build pods manually: pods of seats, each a known player or a random, plus a commander
+  var mb = f.querySelector('.mb'), OWN = {}; try { OWN = JSON.parse(mb.dataset.own || '{}'); } catch (e) {}
+  function seatRow(n){
+    var row = document.createElement('div'); row.className = 'mb-seat';
+    var who = document.createElement('select'); who.name = 'mb-player'; who.setAttribute('aria-label', 'Seat ' + n + ' player');
+    who.appendChild(opt('', 'Empty seat'));
+    Object.keys(OWN).forEach(function(k){ who.appendChild(opt(k, k)); });
+    who.appendChild(opt('__random', 'Random…'));
+    var guest = document.createElement('input'); guest.name = 'mb-guest'; guest.placeholder = 'Random’s name'; guest.maxLength = 40; guest.hidden = true;
+    var deck = document.createElement('select'); deck.name = 'mb-deck'; deck.setAttribute('aria-label', 'Seat ' + n + ' commander');
+    fillDecks(deck, [], 'Commander');
+    who.addEventListener('change', function(){
+      guest.hidden = who.value !== '__random'; if (!guest.hidden) guest.focus();
+      var keep = deck.value, own = OWN[who.value] || [];
+      fillDecks(deck, own, 'Commander');
+      deck.value = keep || own[0] || '';
+    });
+    var sn = document.createElement('span'); sn.className = 'sn'; sn.textContent = n;
+    row.appendChild(sn); row.appendChild(who); row.appendChild(deck); row.appendChild(guest);
+    return row;
+  }
+  function addPod(){
+    var k = mb.querySelectorAll('.mb-pod').length + 1; if (k > 4) return;
+    var pod = document.createElement('div'); pod.className = 'mb-pod';
+    var head = document.createElement('div'); head.className = 'mb-head';
+    var title = document.createElement('strong'); title.textContent = 'Pod ' + k; head.appendChild(title);
+    var seats = document.createElement('div'); seats.className = 'mb-seats';
+    for (var i = 1; i <= 4; i++) seats.appendChild(seatRow(i));
+    var more = document.createElement('button'); more.type = 'button'; more.className = 'ghost small'; more.textContent = '+ 5th seat';
+    more.addEventListener('click', function(){ seats.appendChild(seatRow(5)); more.remove(); });
+    head.appendChild(more);
+    if (k > 1) {
+      var rm = document.createElement('button'); rm.type = 'button'; rm.className = 'ghost small'; rm.textContent = 'Remove';
+      rm.addEventListener('click', function(){ pod.remove(); renumber(); }); head.appendChild(rm);
+    }
+    pod.appendChild(head); pod.appendChild(seats); mb.appendChild(pod);
+  }
+  function renumber(){ mb.querySelectorAll('.mb-pod').forEach(function(p, i){ p.querySelector('strong').textContent = 'Pod ' + (i + 1); }); }
+  addPod();
+  f.querySelector('.mb-add').addEventListener('click', addPod);
+  function manualPods(){
+    var pods = [], seen = {}, problem = '';
+    mb.querySelectorAll('.mb-pod').forEach(function(p, i){
+      var seats = [];
+      p.querySelectorAll('.mb-seat').forEach(function(r){
+        var v = r.querySelector('[name=mb-player]').value; if (!v) return;
+        var g = v === '__random', name = g ? r.querySelector('[name=mb-guest]').value.trim() : v;
+        if (g && !name) problem = problem || 'Pod ' + (i + 1) + ': type a name for each random.';
+        if (name && seen[name.toLowerCase()]) problem = problem || name + ' is seated twice.';
+        seen[name.toLowerCase()] = 1;
+        seats.push({ player: name, guest: g, commander: r.querySelector('[name=mb-deck]').value });
+      });
+      if (seats.length && (seats.length < 3 || seats.length > 5)) problem = problem || 'Pod ' + (i + 1) + ' needs 3 to 5 players.';
+      if (seats.length) pods.push(seats);
+    });
+    if (!pods.length) problem = problem || 'Seat at least one pod.';
+    return { pods: pods, problem: problem };
   }
   f.addEventListener('change', sync); sync();
   f.addEventListener('submit', function(ev){
     ev.preventDefault();
+    if (scenario() === 'generic') {
+      var m = manualPods(); if (m.problem) return bad(f, m.problem);
+      var known = []; m.pods.forEach(function(p){ p.forEach(function(x){ if (!x.guest) known.push(x.player); }); });
+      return send(f, { type: 'session', scenario: 'generic', date: f.querySelector('[name=date]').value, players: known, pods: m.pods,
+                       reporter: f.querySelector('[name=reporter]').value.trim(), pin: f.querySelector('[name=pin]').value.trim() },
+                  'Pods saved. They appear here within about 10 minutes.');
+    }
     var s = scenario(), players = Array.prototype.map.call(f.querySelectorAll('[name=players]:checked'), function(x){ return x.value; });
     if (players.length < 3) return bad(f, 'Pick at least 3 players.');
     var body = { type: 'session', scenario: s, date: f.querySelector('[name=date]').value, players: players,
@@ -808,15 +884,13 @@ document.querySelectorAll('form.pf').forEach(function(f){
       if (players.indexOf(body.player) < 0) return bad(f, body.player + ' isn’t ticked as playing.');
     }
     if (s === 'fix') { body.target = target.value; if (!body.target) return bad(f, 'Choose the deck they need to face.'); }
-    if (s === 'specific' || s === 'generic') {
+    if (s === 'specific') {
       body.assign = [];
       f.querySelectorAll('.as-row').forEach(function(r){
         if (r.hidden) return;
         body.assign.push({ player: r.dataset.player, commander: r.querySelector('[name=as-deck]').value,
-                           pod: r.querySelector('[name=as-pod]').value, seat: r.querySelector('[name=as-seat]').value });
+                           seat: r.querySelector('[name=as-seat]').value });
       });
-      if (s === 'generic' && body.assign.some(function(a){ return !a.commander || !a.pod || !a.seat; }))
-        return bad(f, 'Generic practice: pick a pod, seat and deck for every player.');
     }
     send(f, body, 'Request saved. Pods for ' + body.date + ' appear here within about 10 minutes.');
   });

@@ -29,6 +29,8 @@ def args_for(req: dict, roster: dict, has_home: bool) -> tuple[list[str] | None,
     day = str(p.get("date") or "")
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day):
         return None, {}, f"bad date {day!r}"
+    if p.get("scenario") == "generic" and p.get("pods"):
+        return manual_args(p, day, roster)
     names = []
     for n in p.get("players") or []:
         pl = find_player(roster, str(n))
@@ -112,6 +114,35 @@ def scenario_args(p: dict, day: str, names: list[str], scenario: str, roster: di
     return argv, info, ""
 
 
+def manual_args(p: dict, day: str, roster: dict):
+    """Pods built by hand on the site: [[{player, guest?, commander?}, ...], ...] in seat order.
+    Roster players and randoms/guests (anyone not on the roster) can sit anywhere."""
+    pods, known, seen = [], [], set()
+    for i, pod in enumerate(p.get("pods") or [], 1):
+        seats = []
+        for s in pod or []:
+            name = " ".join(str(s.get("player") or "").split())[:40]
+            pl = find_player(roster, name) if name else None
+            if not pl and not s.get("guest"):
+                return None, {}, f"manual: unknown player {name!r}"
+            if pl:
+                name = pl["name"]
+                if name not in known:
+                    known.append(name)
+            if name and name.lower() in seen:
+                return None, {}, f"manual: {name} is in two seats"
+            seen.add(name.lower())
+            seats.append({"player": name, "commander": str(s.get("commander") or "").strip()[:120],
+                          **({} if pl else {"guest": True})})
+        if not 3 <= len(seats) <= 5:
+            return None, {}, f"manual: pod {i} needs 3 to 5 seats"
+        pods.append(seats)
+    if not pods:
+        return None, {}, "manual: no pods"
+    argv = ["--date", day, "--scenario", "generic", "--json", "--manual", json.dumps(pods)]
+    return argv, {"players": known, "scenario": "generic"}, ""
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--file", help="JSON from the endpoint, instead of fetching")
@@ -145,8 +176,9 @@ def main():
             continue
         p = req["payload"]
         av = load("availability.json")
-        av["sessions"][p["date"]] = sorted(info["players"])
-        save("availability.json", av)
+        if info["players"]:
+            av["sessions"][p["date"]] = sorted(info["players"])
+            save("availability.json", av)
         try:
             _, result = podmod.plan(podmod.parser().parse_args(argv))
         except SystemExit as e:
