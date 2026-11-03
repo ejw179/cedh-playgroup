@@ -73,7 +73,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if git diff --quiet -- data; then
+          if [ -z "$(git status --porcelain -- data)" ]; then  # also sees new files, e.g. the first games.json
             echo "No new results."
             exit 0
           fi
