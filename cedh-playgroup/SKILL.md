@@ -288,14 +288,26 @@ python scripts/discord.py preview --kind pods --file draft.md   # kinds: pods, m
 python scripts/discord.py send "<outbox file printed by preview>"
 ```
 
-**The one exception: automatic posts from the site.** The group asked for pods
-planned on the website and results reported on the website to be posted as
-they come in. The import job runs `scripts/announce.py`. It compares
-`pods.json`/`games.json` with the last commit and posts each new session's
-seating and each new pod result. It needs the `DISCORD_WEBHOOK_URL` GitHub
-secret; without it, it skips the post. `announce.py --dry-run` prints those
-posts locally. Anything else, including pods or results you log from chat,
-still goes through preview and send.
+**The one exception: automatic session posts.** The group asked for pods and
+results to go out as they happen, with players tagged: sessions started with
+`/start-session` or `/start-pod` (or planned on the site), each next game of a
+session, and every result. `scripts/announce.py` compares
+`pods.json`/`games.json` with the last commit and posts each new seating as a
+header plus one message per pod, with tags and the reason for each seat. It
+posts each new result with every player's perspective. Tags come from the
+private `DISCORD_TAGS` secret (`Name=ID,...`). Never write Discord IDs into the
+repo. Without `DISCORD_WEBHOOK_URL` it skips the post. `announce.py --dry-run`
+prints the posts locally. Anything else, such as meta posts, availability, or
+results you log from chat outside a session, still goes through preview and
+send.
+
+**Players report by replying in Discord.** Each pod post asks the players to
+reply after the game. `scripts/discord_replies.py`, in the import job, reads
+the replies with the bot token (`DISCORD_BOT_TOKEN`). It maps each author to a
+player and has Claude decide the winner or draw. Then it records the game with
+each player's own words as their note. The Apps Script timer runs the import
+every 5 minutes while a posted session is being played. Setup is in
+`apps-script/README.md` ("Discord: tags and replies").
 
 `send` posts the saved preview byte for byte. It refuses a file that changed
 after preview, or one that was already sent. If the user asks for edits, write
@@ -357,6 +369,17 @@ gauntlet pilot, or seat them on the practice deck the note is about. Then say
 so in the why ("Eric's at Darison's table because his last takeaway was about
 Sisay"). If a note is vague, don't invent a target.
 
+**Multi-game sessions (`/start-session`, `/start-pod`).** `scripts/session.py
+start --date D --games N --goal "..." --time-limit 80 --rules "win or draw" --
+<pods.py args>` plans game 1 and saves the session with its goal and terms.
+When every pod of the current game has a result (site form, Discord replies or
+chat), `session.py advance` (run by the import job) plans the next game. The
+next game keeps the same decks, tournament style, and moves players to seats
+they haven't had yet that day. A manual session rotates seats by one. When
+the last game is reported, the session is marked done and moves to History.
+`session.py status` shows where every open session stands. The project
+commands `.claude/skills/start-session` and `start-pod` walk through it.
+
 **Lock the seating, then close the pod on the site.** Once the group agrees
 on pods, save them so the site shows exactly that seating and offers the
 report form:
@@ -368,8 +391,8 @@ python scripts/pods.py --date 2026-11-08 --local --save
 Each saved pod on the site has a **Report result** form: winner (or draw),
 each seat's deck and decklist (filled in from their profile) and a note per
 player, protected by the group PIN. Submissions go to the group's Google
-Apps Script (`apps-script/`). The *Import pod results* workflow runs every 30
-minutes, records them as games (turn order comes from the saved seating), and
+Apps Script (`apps-script/`). Each submission starts the *Import pod results*
+workflow, which records them as games (turn order comes from the saved seating), and
 rebuilds the site. To import right away: `python scripts/import_results.py`
 (or run the workflow). Results reported to you in chat still go through
 `log-game` as before. Include `--pod` and `--note-for` when you have them.
@@ -377,8 +400,10 @@ rebuilds the site. To import right away: `python scripts/import_results.py`
 ## 6. The group website
 
 The group has a public site at https://ejw179.github.io/cedh-playgroup, built
-by `scripts/build_site.py`. It shows next session's pods with a per-player
-why, the meta (local, big events, global), player profiles and practice
+by `scripts/build_site.py`. Its **Current pod** tab shows the session being
+played: game k of N, the goal and time limit, each seat's why, the report form,
+and earlier games. When the session is done it moves to History. It also shows
+upcoming sessions, the meta (local, big events, global), player profiles and practice
 standings. A GitHub Action in the repo
 (`.github/workflows/site.yml`) rebuilds it nightly after syncing TopDeck,
 and on every push that touches `data/` or the scripts.

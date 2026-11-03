@@ -82,14 +82,37 @@ def cmd_preview(a):
     print("Show this to the user. Send only after they approve: python discord.py send \"%s\"" % path)
 
 
-def post(url: str, payload: dict) -> None:
+def tags() -> dict[str, str]:
+    """Player name (lower case) -> Discord user ID, from the private DISCORD_TAGS secret:
+    "Eric=123456789012345678,Alex=234567890123456789" (or the same as a JSON object).
+    Kept out of the public repo on purpose."""
+    raw = secret("DISCORD_TAGS")
+    if not raw:
+        return {}
+    try:
+        if raw.lstrip().startswith("{"):
+            pairs = json.loads(raw).items()
+        else:
+            pairs = [x.split("=", 1) for x in re.split(r"[,;\n]", raw) if "=" in x]
+    except ValueError:
+        print("DISCORD_TAGS isn't valid; posting without tags.", file=sys.stderr)
+        return {}
+    return {k.strip().lower(): str(v).strip() for k, v in pairs if str(v).strip().isdigit()}
+
+
+def post(url: str, payload: dict, wait: bool = False) -> dict | None:
+    """Send one webhook message. With wait=True, Discord returns the message (its id is what
+    players reply to)."""
+    if wait:
+        url += ("&" if "?" in url else "?") + "wait=true"
     req = urllib.request.Request(url, data=json.dumps(payload).encode(), method="POST",
                                  headers={"Content-Type": "application/json",
                                           "User-Agent": "cedh-playgroup-skill (webhook, 1.0)"})
     for attempt in range(5):
         try:
-            with urllib.request.urlopen(req, timeout=30):
-                return
+            with urllib.request.urlopen(req, timeout=30) as r:
+                body = r.read()
+                return json.loads(body) if wait and body else None
         except urllib.error.HTTPError as e:
             if e.code == 429:
                 try:

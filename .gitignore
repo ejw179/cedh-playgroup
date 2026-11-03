@@ -15,5 +15,7 @@ __pycache__/
 data/cache/
 data/outbox/
 site/
-.claude/
+# local Claude settings stay local; the /start-session and /start-pod commands are shared
+.claude/*
+!.claude/skills/
 data/ai_notes.json

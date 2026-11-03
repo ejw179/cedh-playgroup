@@ -2,7 +2,9 @@
 
   python build_site.py --out ../../site
 
-One self-contained index.html, in four sections:
+One self-contained index.html, in five sections:
+  Current   the pod being played now (game k of N in a multi-game session), with
+            each seat's reason and the report form; once reported it moves to History
   Sessions  plan a session (scenario + players), upcoming sessions with pods,
             each seat's reason, gap call-outs, results and report forms
   Meta      local / big events / global, with Claude's analyst notes and gaps
@@ -15,7 +17,7 @@ import html
 import json
 import re
 from collections import defaultdict
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pods as podmod
@@ -86,15 +88,19 @@ def meta_views(cfg: dict) -> list[dict]:
     return views
 
 
-def session_dates(games: list[dict]) -> tuple[list[str], list[str]]:
-    """(upcoming soonest-first, past newest-first). Today counts as upcoming."""
+def session_dates(games: list[dict]) -> tuple[str | None, list[str], list[str]]:
+    """(current, upcoming soonest-first, past newest-first). Current is the soonest session
+    still being played (yesterday's counts, for late nights); a finished session is past."""
     today = date.today().isoformat()
-    saved = set(load("pods.json")["sessions"])
+    sessions = load("pods.json")["sessions"]
+    saved, done = set(sessions), {d for d, s in sessions.items() if s.get("done")}
     avail = set(load("availability.json")["sessions"])
     played = {g["date"] for g in games}
-    upcoming = sorted(d for d in saved | avail if d >= today)
-    past = sorted((d for d in saved | played if d < today), reverse=True)
-    return upcoming, past
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    current = min((d for d in saved - done if d >= yesterday), default=None)
+    upcoming = sorted(d for d in (saved | avail) - done if d >= today and d != current)
+    past = sorted((d for d in saved | played if (d < today or d in done) and d != current), reverse=True)
+    return current, upcoming, past
 
 
 def build_pods(day: str, cfg: dict) -> dict | None:
@@ -220,7 +226,7 @@ def game_card(g: dict) -> str:
             f'<ol class="game-seats">{"".join(rows)}</ol></div>')
 
 
-def report_form(day: str, pod: dict, results_url: str) -> str:
+def report_form(day: str, pod: dict, results_url: str, game: int = 1) -> str:
     """'Close the pod': winner, each seat's deck + decklist + note, group PIN."""
     if not results_url:
         return ""
@@ -237,7 +243,7 @@ def report_form(day: str, pod: dict, results_url: str) -> str:
                       f'{e(s["player"])}</label>' for s in pod["seats"])
     winners += '<label class="chip"><input type="radio" name="winner" value="draw"> Draw</label>'
     return (f'<details class="fold"><summary>Report result</summary>'
-            f'<form class="form rf" data-date="{e(day)}" data-pod="{pod["pod"]}">'
+            f'<form class="form rf" data-date="{e(day)}" data-pod="{pod["pod"]}" data-game="{game}">'
             f'<div class="field"><span class="label">Winner</span><div class="chips">{winners}</div></div>'
             f'{seats}'
             f'<div class="two"><label>Your name <input name="reporter" maxlength="60"></label>'
@@ -342,7 +348,8 @@ def pod_card(p: dict, pod: dict, games: list[dict], results_url: str, ai: dict |
                     f'<div class="seat-top"><strong>{e(s["player"])}</strong>'
                     f'<span class="deck">{deck_link(s["commander"], s.get("decklist"))}</span>{tags}</div>'
                     f'{f"<div class=summary>{e(summary)}</div>" if summary else ""}{why}</div></li>')
-    done = [g for g in games if g["date"] == p["date"] and g.get("pod") == pod["pod"]]
+    k = p.get("game", 1)
+    done = [g for g in games if g["date"] == p["date"] and g.get("pod", 1) == pod["pod"] and g.get("game", 1) == k]
     status = badge("complete", "good") if done else ("" if p.get("draft") else badge("awaiting result"))
     brief = ""
     if ai and ai.get("session") == p["date"] and analysis:
@@ -350,7 +357,9 @@ def pod_card(p: dict, pod: dict, games: list[dict], results_url: str, ai: dict |
         brief = ai_block("Briefing", f"<p>{e(text)}</p>", ai) if text else ""
     warn = "".join(f'<p class="warn">{e(w)}</p>' for w in pod.get("warnings", []))
     results = (f'<div class="results"><h4>Results</h4>{"".join(game_card(g) for g in done)}</div>' if done else "")
-    form = "" if p.get("draft") else report_form(p["date"], pod, results_url)
+    form = "" if p.get("draft") or done else report_form(p["date"], pod, results_url, k)
+    if form and p.get("discord"):
+        form = '<p class="muted small">Or reply to this pod’s Discord post: who won and your take.</p>' + form
     return (f'<article class="card pod"><div class="pod-head"><h4>Pod {pod["pod"]}</h4>{status}</div>'
             f'{brief}<ol class="seats">{"".join(rows)}</ol>{warn}{results}{form}</article>')
 
@@ -367,13 +376,19 @@ def session_card(p: dict | None, day: str, games: list[dict], results_url: str, 
     sc = scenario_of(p)
     label = sc.get("label") or "Custom"
     pods = p.get("pods", [])
-    done = sum(1 for pod in pods if any(g["date"] == day and g.get("pod") == pod["pod"] for g in games))
+    k, n_games = p.get("game", 1), p.get("games", 1)
+    this = [g for g in games if g["date"] == day and g.get("game", 1) == k]
+    done = sum(1 for pod in pods if any(g.get("pod", 1) == pod["pod"] for g in this))
     if p.get("draft"):
         status = badge("draft", "warnb")
+    elif p.get("done"):
+        status = badge("complete", "good")
     elif pods and done == len(pods):
         status = badge("complete", "good")
     elif done:
         status = badge(f"{done}/{len(pods)} pods reported")
+    elif k > 1:
+        status = badge("in progress", "accent")
     else:
         status = badge("past, no results" if past else "upcoming", "" if past else "accent")
     by = f' · planned by {e(p["requested_by"])}' if p.get("requested_by") else ""
@@ -390,12 +405,37 @@ def session_card(p: dict | None, day: str, games: list[dict], results_url: str, 
     cards = "".join(pod_card(p, pod, games, results_url, ai) for pod in pods)
     bench = (f'<p class="muted small">Sitting out first game: {e(", ".join(p["bench"]))}. Rotate them in next.</p>'
              if p.get("bench") else "")
-    stray = [g for g in games if g["date"] == day and not any(g.get("pod") == pod["pod"] for pod in pods)]
+    earlier = [h["game"] for h in p.get("history", [])]
+    stray = [g for g in games if g["date"] == day and g.get("game", 1) not in earlier
+             and not (g.get("game", 1) == k and any(g.get("pod", 1) == pod["pod"] for pod in pods))]
+    rounds = "".join(
+        f'<details class="fold"><summary>Game {h["game"]} <span class="muted small">'
+        f'{e(", ".join(str(x["seat"]) + ". " + x["player"] for pod in h["pods"] for x in pod["seats"]))}</span></summary>'
+        f'{"".join(game_card(g) for g in games if g["date"] == day and g.get("game", 1) == h["game"])}</details>'
+        for h in p.get("history", []))
+    rounds = f'<div class="results"><h4>Earlier games</h4>{rounds}</div>' if rounds else ""
+    if n_games > 1:
+        game_badge = badge(f"{n_games} games") if p.get("done") else badge(f"game {k} of {n_games}")
+    else:
+        game_badge = ""
+    terms = " · ".join(x for x in (f"{p['time_limit']} min" if p.get("time_limit") else "", p.get("rules", "")) if x)
+    if p.get("goal"):
+        goal = f'<p class="goal"><strong>Goal:</strong> {e(p["goal"])}{(" · " + e(terms)) if terms else ""}</p>'
+    else:
+        goal = f'<p class="goal">{e(terms)}</p>' if terms else ""
     other = (f'<div class="results"><h4>Other games that day</h4>{"".join(game_card(g) for g in stray)}</div>'
              if stray else "")
-    return (f'<div class="session"><div class="session-head"><h3>{e(title)}</h3>{badge(label, "accent")}{status}</div>'
-            f'<p class="muted small">{e(help_text)}{(" · " + e(" · ".join(extra))) if extra else ""}{by}</p>'
-            f'{draft}{gaps_block(p.get("gaps"))}<div class="pods">{cards}</div>{bench}{other}</div>')
+    return (f'<div class="session"><div class="session-head"><h3>{e(title)}</h3>{badge(label, "accent")}{game_badge}{status}</div>'
+            f'{goal}<p class="muted small">{e(help_text)}{(" · " + e(" · ".join(extra))) if extra else ""}{by}</p>'
+            f'{draft}{gaps_block(p.get("gaps"))}<div class="pods">{cards}</div>{bench}{rounds}{other}</div>')
+
+
+def render_current(games, cfg, ai, current) -> str:
+    if not current:
+        return ('<p class="empty">No pod in play right now. Start one by asking Claude '
+                '(<code>/start-session</code> or <code>/start-pod</code>), or under <strong>Sessions</strong>. '
+                'Finished sessions are under <strong>History</strong>.</p>')
+    return session_card(build_pods(current, cfg), current, games, cfg.get("results_url", ""), ai)
 
 
 def render_sessions(roster, games, cfg, ai, upcoming) -> str:
@@ -591,6 +631,7 @@ CSS = """
 body{margin:0;background:var(--bg);color:var(--ink);font:15.5px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 a{color:var(--accent);text-underline-offset:2px}code{font-size:.85em;background:var(--sunk);padding:.1em .35em;border-radius:4px;word-break:break-word}
 h2,h3,h4{letter-spacing:-.01em;line-height:1.25}
+.goal{margin:.25rem 0 .5rem;padding:.5rem .75rem;border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:6px}
 .wrap{max-width:1120px;margin:0 auto;padding:0 16px}
 .top{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);
 border-bottom:1px solid var(--line)}
@@ -779,7 +820,8 @@ document.querySelectorAll('form.rf').forEach(function(f){
       return { seat: i + 1, player: fs.dataset.player, guest: !!fs.dataset.guest, commander: fs.querySelector('[name=commander]').value.trim(),
                decklist: fs.querySelector('[name=decklist]').value.trim(), note: fs.querySelector('[name=note]').value.trim() };
     });
-    send(f, { type: 'result', date: f.dataset.date, pod: Number(f.dataset.pod), winner: winner.value, seats: seats,
+    send(f, { type: 'result', date: f.dataset.date, pod: Number(f.dataset.pod), game: Number(f.dataset.game || 1),
+              winner: winner.value, seats: seats,
               reporter: f.querySelector('[name=reporter]').value.trim(), pin: f.querySelector('[name=pin]').value.trim() },
          'Saved. It shows here in a few minutes. Report the next game the same way.',
          function(){ f.querySelectorAll('[name=note]').forEach(function(t){ t.value = ''; });
@@ -925,10 +967,11 @@ def page(cfg: dict) -> str:
     prof = Profiler(30, 16)
     ai = load_ai()
     views = meta_views(cfg)
-    upcoming, past = session_dates(games)
+    current, upcoming, past = session_dates(games)
     url = cfg.get("results_url", "")
     sections = [
-        ("sessions", "Sessions", "plan, play, report", render_sessions(roster, games, cfg, ai, upcoming)),
+        ("current", "Current pod", "being played now", render_current(games, cfg, ai, current)),
+        ("sessions", "Sessions", "plan and upcoming", render_sessions(roster, games, cfg, ai, upcoming)),
         ("meta", "Meta", "what we’ll face", render_meta(views, roster, ai)),
         ("players", "Players", "profiles and practice decks", render_players(roster, prof, games, ai, url)),
         ("history", "History", "standings and past sessions", render_history(games, cfg, ai, past)),
@@ -946,7 +989,7 @@ def page(cfg: dict) -> str:
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%236b3fd1'/%3E%3Ctext x='16' y='22' font-size='16' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='700'%3EC%3C/text%3E%3C/svg%3E">
 <style>{CSS}</style></head><body data-results-url="{e(url)}">
 <header class="top"><div class="wrap"><a class="brand" href="#"><span class="logo">C</span>cEDH Playgroup</a><nav>{nav}</nav></div></header>
-<div class="wrap hero"><p class="muted small">{e(sub)}</p>{summary_strip(roster, games, views, upcoming, cfg)}</div>
+<div class="wrap hero"><p class="muted small">{e(sub)}</p>{summary_strip(roster, games, views, ([current] if current else []) + upcoming, cfg)}</div>
 <main>{body}</main>
 <footer><div class="wrap"><p>Tournament data from <a href="https://topdeck.gg">TopDeck.gg</a>. Updated {e(stamp)}.</p>
 <p>Win rates are four-player numbers: an average seat wins about 20% once draws are counted. Samples under ~10 games are hints, not findings.

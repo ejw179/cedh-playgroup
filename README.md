@@ -22,7 +22,8 @@ and posting to the group's Discord.
 - `apps-script/`: the Google Apps Script that receives "Report result" submissions (setup in its README)
 - `cedh-playgroup/evals/`: test cases (prompt, expected outcome, graders, synthetic data)
 - `.github/workflows/site.yml`: nightly sync, build, deploy to GitHub Pages
-- `.github/workflows/import.yml`: started by each site submission (10-minute schedule as fallback): import results, plan sessions, post them to Discord, rebuild
+- `.github/workflows/import.yml`: started by each site submission, and every 5 minutes while a session is being played (10-minute schedule as fallback): import results from the site and from Discord replies, plan sessions and each session's next game, post them to Discord with tags, rebuild
+- `.claude/skills/`: the `/start-session` and `/start-pod` commands for Claude Code in this repo
 
 ## Setup
 

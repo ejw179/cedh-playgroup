@@ -69,6 +69,8 @@ def to_game(sub: dict, roster: dict) -> tuple[dict | None, str]:
             "source": sub["id"], "reported_by": str(p.get("reporter") or "")[:60]}
     if p.get("pod"):
         game["pod"] = int(p["pod"])
+    if p.get("game"):
+        game["game"] = int(p["game"])
     if notes:
         game["notes"] = notes
     if lists:
@@ -101,6 +103,7 @@ def main():
         save("config.json", cfg)
         print(f"Ignoring {len(a.ignore)} submission(s) from now on.")
     seen |= set(cfg.get("ignore_submissions", []))
+    sessions = load("pods.json")["sessions"]
     added, skipped = 0, []
     for sub in sorted(subs, key=lambda s: s.get("received", "")):
         if sub.get("id") in seen:
@@ -111,6 +114,9 @@ def main():
         if not game:
             skipped.append(f"{sub.get('id')}: {problem}")
             continue
+        sess = sessions.get(game["date"])
+        if "game" not in game and sess and sess.get("games", 1) > 1:
+            game["game"] = sess.get("game", 1)  # a multi-game session: the game being played now
         games["games"].append(game)
         seen.add(game["source"])
         added += 1
@@ -123,7 +129,7 @@ def main():
             for d in pl.get("decks", []):
                 if d["commander"] == cmdr and not d.get("list"):
                     d["list"] = url
-        print(f"Imported: {game['date']} pod {game.get('pod', '-')}: "
+        print(f"Imported: {game['date']}{' game ' + str(game['game']) if game.get('game') else ''} pod {game.get('pod', '-')}: "
               + ", ".join(f"{i}. {s['player']}" for i, s in enumerate(game["seats"], 1))
               + f" -> {'draw' if game['winner'] is None else game['winner'] + ' won'}")
     changed = apply_practice(subs, roster, seen)

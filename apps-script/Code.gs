@@ -79,6 +79,36 @@ function startImport_() {
   }
 }
 
+/**
+ * Runs every 5 minutes once installTrigger() has been run. While a session that was
+ * posted to Discord is being played (dated today or yesterday, not finished yet), it
+ * starts the import so players' Discord replies are read and the next game is planned.
+ * The rest of the time it does nothing.
+ */
+function pollSessions() {
+  const repo = PropertiesService.getScriptProperties().getProperty('GITHUB_REPO') || 'ejw179/cedh-playgroup';
+  const res = UrlFetchApp.fetch('https://raw.githubusercontent.com/' + repo + '/main/data/pods.json',
+                                { muteHttpExceptions: true });
+  if (res.getResponseCode() !== 200) return;
+  const sessions = JSON.parse(res.getContentText()).sessions || {};
+  const tz = 'America/New_York';
+  const days = [Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd'),
+                Utilities.formatDate(new Date(Date.now() - 864e5), tz, 'yyyy-MM-dd')];
+  const live = Object.keys(sessions).some(function (d) {
+    const s = sessions[d];
+    return days.indexOf(d) >= 0 && !s.done && s.discord && (s.discord.posts || []).length > 0;
+  });
+  if (live) startImport_();
+}
+
+/** Run this once from the editor (Run > installTrigger) to start pollSessions every 5 minutes. */
+function installTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'pollSessions') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('pollSessions').timeBased().everyMinutes(5).create();
+}
+
 /** List every submission (they're published on the site anyway, so no PIN). */
 function doGet() {
   const rows = sheet_().getDataRange().getValues().slice(1);

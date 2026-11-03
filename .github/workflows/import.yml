@@ -1,9 +1,11 @@
 name: Import pod results
 
-# Started by the Apps Script on every site submission (the schedule is a
-# fallback that GitHub runs late or skips): pull results submitted on the site (via the Apps Script
-# endpoint in data/config.json), record them in data/games.json, and if
-# anything changed, commit and rebuild the site.
+# Started by the Apps Script on every site submission, and every few minutes
+# while a session is being played (to read Discord replies); the schedule is a
+# fallback that GitHub runs late or skips. Pulls results from the site (via the
+# Apps Script endpoint in data/config.json) and from Discord replies, records
+# them in data/games.json, plans the next game, posts to Discord, and if
+# anything changed, commits and rebuilds the site.
 on:
   schedule:
     - cron: "4,14,24,34,44,54 * * * *"  # off the hour marks, which GitHub often drops when busy
@@ -36,9 +38,22 @@ jobs:
         with:
           python-version: "3.12"
 
+      - run: pip install anthropic
+
       - name: Import new results
         working-directory: cedh-playgroup/scripts
         run: python import_results.py
+
+      # Players reply to each pod's Discord post with how the game went; this turns
+      # those replies into results (skipped if DISCORD_BOT_TOKEN isn't set).
+      - name: Read Discord replies
+        working-directory: cedh-playgroup/scripts
+        continue-on-error: true
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          DISCORD_TAGS: ${{ secrets.DISCORD_TAGS }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python discord_replies.py
 
       # "Plan a session" requests: building pods needs the TopDeck cache for seat
       # and matchup data, so restore the one the site build saved (or sync if none).
@@ -60,6 +75,17 @@ jobs:
             echo "No new session requests."
           fi
 
+      # Multi-game sessions: once the current game is reported, plan the next one.
+      - name: Plan the next game of running sessions
+        working-directory: cedh-playgroup/scripts
+        env:
+          TOPDECK_API_KEY: ${{ secrets.TOPDECK_API_KEY }}
+        run: |
+          if python session.py advance --pending; then
+            [ -f "$CEDH_PLAYGROUP_DIR/cache/tournaments.json" ] || python sync.py --days 90
+          fi
+          python session.py advance
+
       # New pods and new results go to the group's Discord channel (skipped if the
       # DISCORD_WEBHOOK_URL secret isn't set). A Discord hiccup never blocks the commit.
       - name: Post new pods and results to Discord
@@ -67,6 +93,7 @@ jobs:
         continue-on-error: true
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_TAGS: ${{ secrets.DISCORD_TAGS }}
           SINCE: ${{ inputs.announce_since }}
         run: python announce.py ${SINCE:+--ref "$SINCE"}
 

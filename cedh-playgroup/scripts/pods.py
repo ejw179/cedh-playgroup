@@ -206,10 +206,16 @@ class Model:
             conf = min(1.0, s["games"] / 6)
             focused = n.lower() in self.focus
             if mode == "focus":  # only the focus player's seat matters; everyone else fits around them
-                return -s["vs_field"] * conf if focused else 0.0
+                return (-s["vs_field"] * conf if focused else 0.0) - repeat(n, i)
             mult = 4.0 if focused else 1.0
             v = -s["vs_field"] if mode == "practice" else s["vs_field"]
-            return v * conf * mult
+            return v * conf * mult - repeat(n, i)
+
+        # later games of a multi-game session: don't put anyone back in a seat they already had today
+        used = getattr(self.a, "session_seats", None) or {}
+
+        def repeat(n, i):
+            return 0.5 * used.get(n, []).count(i + 1)
 
         perms = [p for p in itertools.permutations(pod) if allowed(p)] or list(itertools.permutations(pod))
         best = max(perms, key=lambda perm: (sum(val(n, i) for i, n in enumerate(perm)), rng.random()))
@@ -352,6 +358,7 @@ def parser():
     ap.add_argument("--scenario", choices=list(SCENARIOS), help="a preset reason for the pods (see SCENARIOS)")
     ap.add_argument("--fix", action="append", metavar="PLAYER=CMDR", help="put that deck at the player's table")
     ap.add_argument("--seat", action="append", metavar="PLAYER=N", help="fix a player's seat (turn order)")
+    ap.add_argument("--first-deck", action="store_true", help="everyone plays their #1 practice deck (\"best decks\")")
     ap.add_argument("--manual", help='pods built by hand: JSON pods in seat order, e.g. [[{"player":"Eric","commander":"Kinnan"},{"player":"Sam","guest":true,"commander":"Tymna"},...]]')
     return ap
 
