@@ -1,11 +1,11 @@
 name: Import pod results
 
-# Every 30 minutes: pull results submitted on the site (via the Apps Script
+# About every 10 minutes: pull results submitted on the site (via the Apps Script
 # endpoint in data/config.json), record them in data/games.json, and if
 # anything changed, commit and rebuild the site.
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "4,14,24,34,44,54 * * * *"  # off the hour marks, which GitHub often drops when busy
   workflow_dispatch:
 
 permissions:
