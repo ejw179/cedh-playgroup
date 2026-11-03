@@ -71,7 +71,9 @@ jobs:
           fi
           git config user.name "cedh-playgroup bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/games.json data/roster.json data/pods.json data/availability.json
+          for f in games roster pods availability; do  # games.json doesn't exist until the first result
+            [ -f "data/$f.json" ] && git add "data/$f.json"
+          done
           git commit -m "Import results and session requests from the site"
           git push
           # pushes made with this token don't trigger other workflows, so start the site build directly
