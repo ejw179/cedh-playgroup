@@ -431,8 +431,8 @@ The site's **Plan a session** form (top of *Next session*) lets anyone with
 the PIN pick a date, tick who's playing, choose seats (practise weak seats,
 rehearse best seats, or random), choose the meta to face (local, big events,
 global, or none), and optionally pick focus players. The request goes to the
-same Apps Script as results. The *Import pod results* workflow (every 10
-minutes) runs `scripts/plan_sessions.py`, which records availability, builds
+same Apps Script as results. The *Import pod results* workflow (started by the
+Apps Script on each submission, with a 10-minute schedule as fallback) runs `scripts/plan_sessions.py`, which records availability, builds
 the pods with the same logic as `pods.py`, and saves them. Planning the same
 date again replaces its pods. The site lists every upcoming saved session.
 When someone asks you in chat to change pods that were planned on the site,

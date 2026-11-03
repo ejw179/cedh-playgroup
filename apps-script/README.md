@@ -1,7 +1,8 @@
 # Results endpoint (Google Apps Script)
 
 The website's **Report result** form sends each game here. Submissions are kept in a Google
-Sheet you own, and the repo's *Import pod results* workflow pulls them every 30 minutes.
+Sheet you own. Each submission starts the repo's *Import pod results* workflow right away
+(see "Instant updates" below), so it shows on the site, and in Discord, within a couple of minutes.
 
 ## Set up (about 5 minutes, once)
 
@@ -18,6 +19,23 @@ Sheet you own, and the repo's *Import pod results* workflow pulls them every 30 
      verified, choose **Advanced → Go to (project) (unsafe)**. It's your own script.
 6. Copy the **Web app URL**. It ends in `/exec`. Give it to Claude, which saves it as `results_url`
    in `data/config.json` and pushes so the site's form starts working.
+
+## Instant updates (GitHub token)
+
+Without this, submissions wait for the workflow's schedule, which GitHub runs late or skips.
+
+1. On GitHub: **Settings → Developer settings → Personal access tokens → Fine-grained tokens →
+   Generate new token** (<https://github.com/settings/personal-access-tokens/new>).
+   - Name: `cedh-playgroup import trigger`. Expiration: up to 1 year (set a reminder).
+   - Repository access: **Only select repositories** → `ejw179/cedh-playgroup`.
+   - Permissions → Repository permissions → **Actions: Read and write**. Nothing else.
+   - **Generate token** and copy it.
+2. In Apps Script: **Project Settings → Script Properties → Add script property**.
+   Property: `GITHUB_TOKEN`, value: the token. **Save**.
+3. **Deploy → Manage deployments → Edit (pencil) → Version: New version → Deploy**. Google asks
+   you to authorize again, because the script now contacts GitHub. Allow it.
+
+The token can only start this repo's workflows. It can't read or change code or secrets.
 
 ## Notes
 

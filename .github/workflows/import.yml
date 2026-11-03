@@ -1,6 +1,7 @@
 name: Import pod results
 
-# About every 10 minutes: pull results submitted on the site (via the Apps Script
+# Started by the Apps Script on every site submission (the schedule is a
+# fallback that GitHub runs late or skips): pull results submitted on the site (via the Apps Script
 # endpoint in data/config.json), record them in data/games.json, and if
 # anything changed, commit and rebuild the site.
 on:

@@ -290,7 +290,7 @@ def plan_form(roster: dict, results_url: str) -> str:
             f'<div class="as">{rows}</div></div>'
             f'<label>Group PIN <input name="pin" type="password" autocomplete="off" required></label>'
             f'<div class="actions"><button type="submit">Build pods</button><span class="status" role="status"></span></div>'
-            f'<p class="muted small">Pods appear below within about 10 minutes. Planning the same date again replaces it.</p>'
+            f'<p class="muted small">Pods appear below in a few minutes. Planning the same date again replaces it.</p>'
             f'</form></details>')
 
 
@@ -781,7 +781,7 @@ document.querySelectorAll('form.rf').forEach(function(f){
     });
     send(f, { type: 'result', date: f.dataset.date, pod: Number(f.dataset.pod), winner: winner.value, seats: seats,
               reporter: f.querySelector('[name=reporter]').value.trim(), pin: f.querySelector('[name=pin]').value.trim() },
-         'Saved. It shows here within about 10 minutes. Report the next game the same way.',
+         'Saved. It shows here in a few minutes. Report the next game the same way.',
          function(){ f.querySelectorAll('[name=note]').forEach(function(t){ t.value = ''; });
                      f.querySelectorAll('[name=winner]').forEach(function(r){ r.checked = false; }); });
   });
@@ -872,7 +872,7 @@ document.querySelectorAll('form.pf').forEach(function(f){
       var known = []; m.pods.forEach(function(p){ p.forEach(function(x){ if (!x.guest) known.push(x.player); }); });
       return send(f, { type: 'session', scenario: 'generic', date: f.querySelector('[name=date]').value, players: known, pods: m.pods,
                        reporter: f.querySelector('[name=reporter]').value.trim(), pin: f.querySelector('[name=pin]').value.trim() },
-                  'Pods saved. They appear here within about 10 minutes.');
+                  'Pods saved. They appear here in a few minutes.');
     }
     var s = scenario(), players = Array.prototype.map.call(f.querySelectorAll('[name=players]:checked'), function(x){ return x.value; });
     if (players.length < 3) return bad(f, 'Pick at least 3 players.');
@@ -892,7 +892,7 @@ document.querySelectorAll('form.pf').forEach(function(f){
                            seat: r.querySelector('[name=as-seat]').value });
       });
     }
-    send(f, body, 'Request saved. Pods for ' + body.date + ' appear here within about 10 minutes.');
+    send(f, body, 'Request saved. Pods for ' + body.date + ' appear here in a few minutes.');
   });
 });
 
@@ -909,7 +909,7 @@ document.querySelectorAll('form.pd').forEach(function(f){
       if (c && !seen[c]) { seen[c] = 1; decks.push({ commander: c, list: l }); }
     });
     send(f, { type: 'practice', player: f.dataset.player, decks: decks, pin: f.querySelector('[name=pin]').value.trim() },
-         decks.length ? 'Saved. Your profile and next pods use these within about 10 minutes.' : 'Saved: practice decks cleared.');
+         decks.length ? 'Saved. Your profile and next pods use these in a few minutes.' : 'Saved: practice decks cleared.');
   });
 });
 """

@@ -22,7 +22,7 @@ and posting to the group's Discord.
 - `apps-script/`: the Google Apps Script that receives "Report result" submissions (setup in its README)
 - `cedh-playgroup/evals/`: test cases (prompt, expected outcome, graders, synthetic data)
 - `.github/workflows/site.yml`: nightly sync, build, deploy to GitHub Pages
-- `.github/workflows/import.yml`: every 30 minutes, import reported results and rebuild if any arrived
+- `.github/workflows/import.yml`: started by each site submission (10-minute schedule as fallback): import results, plan sessions, post them to Discord, rebuild
 
 ## Setup
 
