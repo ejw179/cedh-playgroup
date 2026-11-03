@@ -36,37 +36,6 @@
       "decklists": {
         "Eric": "https://moxfield.com/decks/LcifAU7s1XWWEWpBRQYNww"
       }
-    },
-    {
-      "date": "2026-11-02",
-      "seats": [
-        {
-          "player": "Darison",
-          "commander": "Dihada, Binder of Wills"
-        },
-        {
-          "player": "Eric",
-          "commander": "Kraum, Ludevic's Opus / Tymna the Weaver"
-        },
-        {
-          "player": "Alex",
-          "commander": "Ishai, Ojutai Dragonspeaker / Rograkh, Son of Rohgahh"
-        },
-        {
-          "player": "Jordan",
-          "commander": "Marneus Calgar",
-          "guest": true
-        }
-      ],
-      "winner": "Jordan",
-      "turn_order": true,
-      "note": "",
-      "source": "d02e86e7-608b-4cfe-a7be-6404ff353553",
-      "reported_by": "Eric",
-      "pod": 1,
-      "decklists": {
-        "Eric": "https://moxfield.com/decks/LcifAU7s1XWWEWpBRQYNww"
-      }
     }
   ]
 }
