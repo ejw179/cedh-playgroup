@@ -11,9 +11,8 @@ requests name the same date, the latest one wins.
 """
 import argparse
 import json
-import re
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import pods as podmod
 from common import find_player, load, save
@@ -27,8 +26,12 @@ def args_for(req: dict, roster: dict, has_home: bool) -> tuple[list[str] | None,
     """pods.py arguments for one request plus {players, focus}, or (None, {}, problem)."""
     p = req.get("payload") or {}
     day = str(p.get("date") or "")
-    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day):
+    try:
+        when = date.fromisoformat(day)
+    except ValueError:
         return None, {}, f"bad date {day!r}"
+    if not -60 <= (when - date.today()).days <= 366:  # e.g. a typed year of 0026
+        return None, {}, f"date {day} is too far from today"
     if p.get("scenario") == "generic" and p.get("pods"):
         return manual_args(p, day, roster)
     names = []

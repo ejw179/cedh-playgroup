@@ -790,6 +790,9 @@ document.querySelectorAll('form.rf').forEach(function(f){
 // Plan a session
 document.querySelectorAll('form.pf').forEach(function(f){
   remember(f);
+  var dt = f.querySelector('[name=date]'), day = 864e5;
+  function iso(t){ return new Date(t - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 10); }
+  dt.min = iso(Date.now() - 60 * day); dt.max = iso(Date.now() + 366 * day);
   var target = f.querySelector('[name=target]'); fillDecks(target, [], 'Choose a deck');
   f.querySelectorAll('.as-row').forEach(function(row){
     var own = []; try { own = JSON.parse(row.dataset.own || '[]'); } catch (e) {}
@@ -867,6 +870,7 @@ document.querySelectorAll('form.pf').forEach(function(f){
   f.addEventListener('change', sync); sync();
   f.addEventListener('submit', function(ev){
     ev.preventDefault();
+    if (!dt.value || dt.value < dt.min || dt.value > dt.max) return bad(f, 'Check the date (the year looks wrong).');
     if (scenario() === 'generic') {
       var m = manualPods(); if (m.problem) return bad(f, m.problem);
       var known = []; m.pods.forEach(function(p){ p.forEach(function(x){ if (!x.guest) known.push(x.player); }); });
