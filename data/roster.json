@@ -9,10 +9,22 @@
         {
           "commander": "Sisay, Weatherlight Captain",
           "primary": true
+        },
+        {
+          "commander": "Dihada, Binder of Wills",
+          "primary": false
         }
       ],
       "gauntlet_pilot": false,
-      "added": "2026-11-02"
+      "added": "2026-11-02",
+      "practice_decks": [
+        {
+          "commander": "Sisay, Weatherlight Captain"
+        },
+        {
+          "commander": "Dihada, Binder of Wills"
+        }
+      ]
     },
     {
       "name": "Alex",
@@ -26,7 +38,12 @@
         }
       ],
       "gauntlet_pilot": false,
-      "added": "2026-11-02"
+      "added": "2026-11-02",
+      "practice_decks": [
+        {
+          "commander": "Tayam, Luminous Enigma"
+        }
+      ]
     },
     {
       "name": "Eric",
@@ -36,15 +53,33 @@
       "decks": [
         {
           "commander": "Kraum, Ludevic's Opus / Tymna the Weaver",
-          "primary": true
+          "primary": true,
+          "list": "https://moxfield.com/decks/LcifAU7s1XWWEWpBRQYNww"
         },
         {
           "commander": "Kinnan, Bonder Prodigy",
-          "primary": false
+          "primary": false,
+          "list": "https://moxfield.com/decks/8H3Qlj2hdE2c9JtziaGU_g"
+        },
+        {
+          "commander": "Thrasios, Triton Hero / Tymna the Weaver",
+          "primary": false,
+          "list": "https://moxfield.com/decks/XNifAdHiMHGy2bVk5oh17A"
         }
       ],
       "gauntlet_pilot": false,
-      "added": "2026-11-02"
+      "added": "2026-11-02",
+      "practice_decks": [
+        {
+          "commander": "Kraum, Ludevic's Opus / Tymna the Weaver"
+        },
+        {
+          "commander": "Thrasios, Triton Hero / Tymna the Weaver"
+        },
+        {
+          "commander": "Kinnan, Bonder Prodigy"
+        }
+      ]
     },
     {
       "name": "Ryan",
@@ -66,7 +101,12 @@
         }
       ],
       "gauntlet_pilot": false,
-      "added": "2026-11-02"
+      "added": "2026-11-02",
+      "practice_decks": [
+        {
+          "commander": "Kraum, Ludevic's Opus / Tymna the Weaver"
+        }
+      ]
     },
     {
       "name": "Jeff",
@@ -133,5 +173,13 @@
       "added": "2026-11-02"
     }
   ],
-  "gauntlet_decks": []
+  "gauntlet_decks": [],
+  "applied_requests": [
+    "06c28d84-992d-46de-b879-4db486ebed5f",
+    "2d345998-f9b9-4454-838a-d509d9a5f7a6",
+    "10e32b56-d989-428d-a0d7-276f4937ca66",
+    "b78b8598-0014-4c2b-bf2d-820ceb8eb83d",
+    "a13c0bf9-a08a-433d-be18-fd929b23e3ff",
+    "11a02e0f-efa5-4f24-b7db-eafcd74edc59"
+  ]
 }
