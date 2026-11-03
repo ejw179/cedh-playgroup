@@ -52,6 +52,15 @@ jobs:
             echo "No new session requests."
           fi
 
+      # New pods and new results go to the group's Discord channel (skipped if the
+      # DISCORD_WEBHOOK_URL secret isn't set). A Discord hiccup never blocks the commit.
+      - name: Post new pods and results to Discord
+        working-directory: cedh-playgroup/scripts
+        continue-on-error: true
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python announce.py
+
       - name: Commit and rebuild if anything changed
         env:
           GH_TOKEN: ${{ github.token }}

@@ -288,6 +288,15 @@ python scripts/discord.py preview --kind pods --file draft.md   # kinds: pods, m
 python scripts/discord.py send "<outbox file printed by preview>"
 ```
 
+**The one exception: automatic posts from the site.** The group asked for pods
+planned on the website and results reported on the website to be posted as
+they come in. The import job runs `scripts/announce.py`. It compares
+`pods.json`/`games.json` with the last commit and posts each new session's
+seating and each new pod result. It needs the `DISCORD_WEBHOOK_URL` GitHub
+secret; without it, it skips the post. `announce.py --dry-run` prints those
+posts locally. Anything else, including pods or results you log from chat,
+still goes through preview and send.
+
 `send` posts the saved preview byte for byte. It refuses a file that changed
 after preview, or one that was already sent. If the user asks for edits, write
 a new draft and preview again. Approval covers that one post only. "Post the
