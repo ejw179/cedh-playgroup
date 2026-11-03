@@ -101,7 +101,8 @@
       },
       "date": "2026-11-02",
       "saved_at": "2026-11-03T01:33:47+00:00",
-      "requested_by": "Eric"
+      "requested_by": "Eric",
+      "done": true
     }
   },
   "planned_requests": [
