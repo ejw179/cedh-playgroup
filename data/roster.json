@@ -200,6 +200,9 @@
       "practice_decks": [
         {
           "commander": "Akiri, Line-Slinger / Thrasios, Triton Hero"
+        },
+        {
+          "commander": "Rograkh, Son of Rohgahh / Thrasios, Triton Hero"
         }
       ]
     },
@@ -243,6 +246,7 @@
     "cf83031b-350f-4062-8c52-33b9cd9257ec",
     "e697b64f-44d5-4300-89df-34238612e669",
     "dd07f919-cb58-435f-b128-b8daf38b98ce",
-    "174fdc89-3102-4941-a17a-58bda81e7e44"
+    "174fdc89-3102-4941-a17a-58bda81e7e44",
+    "2bb65ba2-4f1f-4ad7-89c2-5e841c6a0ae0"
   ]
 }
