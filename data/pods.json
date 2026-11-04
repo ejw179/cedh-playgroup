@@ -103,6 +103,281 @@
       "saved_at": "2026-11-03T01:33:47+00:00",
       "requested_by": "Eric",
       "done": true
+    },
+    "2026-11-03": {
+      "field_seats": [
+        0.23281127808424745,
+        0.19375224568300467,
+        0.16439456386194068,
+        0.14264578445670323
+      ],
+      "seat_mode": "practice",
+      "pods": [
+        {
+          "pod": 1,
+          "seats": [
+            {
+              "seat": 1,
+              "player": "Alex",
+              "commander": "Tayam, Luminous Enigma",
+              "gauntlet": false,
+              "seat_record": "1/10",
+              "seat_expected": 0.233,
+              "seat_vs_field": -0.074,
+              "seat_read": "worst seat",
+              "matchups_here": [
+                {
+                  "opponent": "Darison",
+                  "commander": "Sisay, Weatherlight Captain",
+                  "gap": -0.091,
+                  "games": 7,
+                  "evidence": [
+                    "0/7 at tournament tables",
+                    "Tayam field-wide 17% over 64"
+                  ]
+                },
+                {
+                  "opponent": "Ryan",
+                  "commander": "Kraum, Ludevic's Opus / Tymna the Weaver",
+                  "gap": 0.037,
+                  "games": 7,
+                  "evidence": [
+                    "2/7 at tournament tables",
+                    "Tayam field-wide 19% over 113"
+                  ]
+                }
+              ],
+              "needs_practice_elsewhere": [
+                {
+                  "commander": "Rograkh, Son of Rohgahh / Thrasios, Triton Hero",
+                  "gap": -0.045,
+                  "evidence": [
+                    "1/8 at tournament tables",
+                    "Tayam field-wide 16% over 68"
+                  ]
+                },
+                {
+                  "commander": "Magda, Brazen Outlaw",
+                  "gap": -0.042,
+                  "evidence": [
+                    "0/4 at tournament tables",
+                    "Tayam field-wide 23% over 31"
+                  ]
+                }
+              ],
+              "evidence": {
+                "tournament_games": 35,
+                "practice_games": 1
+              },
+              "player_strength": 0.288,
+              "decklist": "",
+              "practice_rank": 1,
+              "takeaway": {
+                "date": "2026-11-02",
+                "pod": 1,
+                "text": "Wheel to 1 land.",
+                "result": "Jordan won",
+                "commander": "Ishai/Rograkh"
+              }
+            },
+            {
+              "seat": 2,
+              "player": "Darison",
+              "commander": "Sisay, Weatherlight Captain",
+              "gauntlet": false,
+              "seat_record": "0/7",
+              "seat_expected": 0.194,
+              "seat_vs_field": -0.09,
+              "seat_read": "worst seat",
+              "matchups_here": [
+                {
+                  "opponent": "Eric",
+                  "commander": "Thrasios, Triton Hero / Tymna the Weaver",
+                  "gap": -0.055,
+                  "games": 1,
+                  "evidence": [
+                    "0/1 at tournament tables",
+                    "Sisay field-wide 15% over 148"
+                  ]
+                },
+                {
+                  "opponent": "Alex",
+                  "commander": "Tayam, Luminous Enigma",
+                  "gap": 0.126,
+                  "games": 4,
+                  "evidence": [
+                    "2/4 at tournament tables",
+                    "Sisay field-wide 27% over 64"
+                  ]
+                },
+                {
+                  "opponent": "Ryan",
+                  "commander": "Kraum, Ludevic's Opus / Tymna the Weaver",
+                  "gap": 0.132,
+                  "games": 5,
+                  "evidence": [
+                    "3/5 at tournament tables",
+                    "Sisay field-wide 19% over 346"
+                  ]
+                }
+              ],
+              "needs_practice_elsewhere": [
+                {
+                  "commander": "Arcum Dagsson",
+                  "gap": -0.079,
+                  "evidence": [
+                    "0/3 at tournament tables",
+                    "Sisay field-wide 11% over 19"
+                  ]
+                }
+              ],
+              "evidence": {
+                "tournament_games": 25,
+                "practice_games": 1
+              },
+              "player_strength": 0.318,
+              "decklist": "",
+              "practice_rank": 1,
+              "takeaway": {
+                "date": "2026-11-02",
+                "pod": 1,
+                "text": "Turn 1 Wheel, blew us out",
+                "result": "Jordan won",
+                "commander": "Dihada"
+              }
+            },
+            {
+              "seat": 3,
+              "player": "Eric",
+              "commander": "Thrasios, Triton Hero / Tymna the Weaver",
+              "gauntlet": false,
+              "seat_record": "0/2",
+              "seat_expected": 0.164,
+              "seat_vs_field": -0.033,
+              "seat_read": "not enough games in this seat yet",
+              "matchups_here": [],
+              "needs_practice_elsewhere": [],
+              "evidence": {
+                "tournament_games": 14,
+                "practice_games": 1
+              },
+              "player_strength": 0.214,
+              "decklist": "https://moxfield.com/decks/XNifAdHiMHGy2bVk5oh17A",
+              "practice_rank": 2,
+              "takeaway": {
+                "date": "2026-11-02",
+                "pod": 1,
+                "text": "Breach > Tainted > Silence. Stopped Meme Bet, couldnt make blue to convert",
+                "result": "Jordan won",
+                "commander": "Kraum/Tymna"
+              }
+            },
+            {
+              "seat": 4,
+              "player": "Ryan",
+              "commander": "Kraum, Ludevic's Opus / Tymna the Weaver",
+              "gauntlet": false,
+              "seat_record": "0/9",
+              "seat_expected": 0.143,
+              "seat_vs_field": -0.076,
+              "seat_read": "worst seat",
+              "matchups_here": [
+                {
+                  "opponent": "Alex",
+                  "commander": "Tayam, Luminous Enigma",
+                  "gap": -0.052,
+                  "games": 1,
+                  "evidence": [
+                    "0/1 at tournament tables",
+                    "Kraum field-wide 15% over 113"
+                  ]
+                },
+                {
+                  "opponent": "Darison",
+                  "commander": "Sisay, Weatherlight Captain",
+                  "gap": 0.052,
+                  "games": 3,
+                  "evidence": [
+                    "1/3 at tournament tables",
+                    "Kraum field-wide 22% over 346"
+                  ]
+                }
+              ],
+              "needs_practice_elsewhere": [
+                {
+                  "commander": "Rograkh, Son of Rohgahh / Silas Renn, Seeker Adept",
+                  "gap": -0.039,
+                  "evidence": [
+                    "0/4 at tournament tables",
+                    "Kraum field-wide 22% over 329"
+                  ]
+                }
+              ],
+              "evidence": {
+                "tournament_games": 27,
+                "practice_games": 0
+              },
+              "player_strength": 0.256,
+              "decklist": "",
+              "practice_rank": 1,
+              "takeaway": null
+            }
+          ],
+          "strength": 0.239,
+          "meta_decks": [
+            "Kraum, Ludevic's Opus / Tymna the Weaver (#1, 8.1% of meta)",
+            "Tayam, Luminous Enigma (#12, 1.8% of meta)",
+            "Thrasios, Triton Hero / Tymna the Weaver (#6, 3.3% of meta)",
+            "Sisay, Weatherlight Captain (#4, 5.0% of meta)"
+          ],
+          "repeat_pairings": [
+            "Alex & Eric (recency-weighted 1.0)",
+            "Alex & Darison (recency-weighted 1.0)",
+            "Eric & Darison (recency-weighted 1.0)"
+          ],
+          "warnings": []
+        }
+      ],
+      "bench": [],
+      "attribution": "Tournament data from TopDeck.gg (https://topdeck.gg)",
+      "meta_label": "all TopDeck events",
+      "scenario": {
+        "id": "worst_seat",
+        "label": "Worst-seat practice",
+        "focus": [],
+        "fix": []
+      },
+      "analysis": true,
+      "date": "2026-11-03",
+      "saved_at": "2026-11-04T00:15:56+00:00",
+      "game": 1,
+      "games": 3,
+      "goal": "Tournament practice: best decks, worst seat. Stress-test politics.",
+      "time_limit": 80,
+      "rules": "win or draw",
+      "plan_args": [
+        "--scenario",
+        "worst_seat",
+        "--players",
+        "Eric",
+        "Darison",
+        "Alex",
+        "Ryan",
+        "--deck",
+        "Eric=Thrasios, Triton Hero / Tymna the Weaver"
+      ],
+      "keep_decks": true,
+      "history": [],
+      "discord": {
+        "posts": [
+          {
+            "game": 1,
+            "pod": 1,
+            "id": "1567331579779358934",
+            "channel": "1566856644569342106"
+          }
+        ]
+      }
     }
   },
   "planned_requests": [
