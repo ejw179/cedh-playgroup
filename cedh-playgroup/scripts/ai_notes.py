@@ -201,46 +201,64 @@ def generate(ctx: dict) -> dict | None:
         print("ai_notes: ANTHROPIC_API_KEY isn't set; skipping.")
         return None
     client = anthropic.Anthropic(api_key=secret("ANTHROPIC_API_KEY"))
-    user = ("Here is this week's data as JSON. Write the notes.\n\n"
-            + json.dumps(ctx, ensure_ascii=False, separators=(",", ":")))
-    try:
-        resp = client.beta.messages.create(
-            model=MODEL,
-            max_tokens=16000,
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",  # if a safety check declines, Anthropic re-runs it on its recommended model
-            output_config={"effort": "medium", "format": {"type": "json_schema", "schema": SCHEMA}},
-            system=SYSTEM,
-            messages=[{"role": "user", "content": user}],
-        )
-    except anthropic.AuthenticationError:
-        print("ai_notes: the API key was rejected; skipping.")
-        return None
-    except anthropic.RateLimitError:
-        print("ai_notes: rate limited; keeping the previous notes.")
-        return None
-    except anthropic.APIStatusError as e:
-        print(f"ai_notes: API error {e.status_code}: {e.message}; keeping the previous notes.")
-        return None
-    except anthropic.APIConnectionError:
-        print("ai_notes: couldn't reach the API; keeping the previous notes.")
-        return None
-    if resp.stop_reason == "refusal":
-        print("ai_notes: the request was declined; keeping the previous notes.")
-        return None
-    if resp.stop_reason == "max_tokens":
-        print("ai_notes: output was cut off; keeping the previous notes.")
-        return None
-    text = next((b.text for b in resp.content if b.type == "text"), "")
-    try:
-        notes = json.loads(text)
-    except json.JSONDecodeError:
-        print("ai_notes: response wasn't valid JSON; keeping the previous notes.")
-        return None
-    u = resp.usage
-    print(f"ai_notes: {resp.model}, {u.input_tokens} in / {u.output_tokens} out tokens "
-          f"(about ${u.input_tokens * 4 / 1e6 + u.output_tokens * 20 / 1e6:.3f}).")
-    return {**notes, "model": resp.model}
+    # the schema can't require non-empty lists, so say exactly what a complete answer holds
+    wanted = [f"meta: 3-4 bullets each for {', '.join(ctx['lenses'])}",
+              f"players: one note each, in this order: {', '.join(p['name'] for p in ctx['players'])}"]
+    if ctx["pods"]:
+        wanted.append(f"pods: one briefing each for pod {', '.join(str(p['pod']) for p in ctx['pods'])}")
+    else:
+        wanted.append("pods: none (no saved session), so an empty list")
+    user = ("Here is this week's data as JSON. Write the notes. A complete answer has:\n- " + "\n- ".join(wanted)
+            + "\n\n" + json.dumps(ctx, ensure_ascii=False, separators=(",", ":")))
+    messages = [{"role": "user", "content": user}]
+    for attempt in (1, 2):  # an incomplete answer gets one retry, told what was missing
+        try:
+            resp = client.beta.messages.create(
+                model=MODEL,
+                max_tokens=16000,
+                betas=["server-side-fallback-2026-07-01"],
+                fallbacks="default",  # if a safety check declines, Anthropic re-runs it on its recommended model
+                output_config={"effort": "medium", "format": {"type": "json_schema", "schema": SCHEMA}},
+                system=SYSTEM,
+                messages=messages,
+            )
+        except anthropic.AuthenticationError:
+            print("ai_notes: the API key was rejected; skipping.")
+            return None
+        except anthropic.RateLimitError:
+            print("ai_notes: rate limited; keeping the previous notes.")
+            return None
+        except anthropic.APIStatusError as e:
+            print(f"ai_notes: API error {e.status_code}: {e.message}; keeping the previous notes.")
+            return None
+        except anthropic.APIConnectionError:
+            print("ai_notes: couldn't reach the API; keeping the previous notes.")
+            return None
+        u = resp.usage
+        print(f"ai_notes: {resp.model}, {u.input_tokens} in / {u.output_tokens} out tokens "
+              f"(about ${u.input_tokens * 4 / 1e6 + u.output_tokens * 20 / 1e6:.3f}).")
+        if resp.stop_reason == "refusal":
+            print("ai_notes: the request was declined; keeping the previous notes.")
+            return None
+        if resp.stop_reason == "max_tokens":
+            print("ai_notes: output was cut off; keeping the previous notes.")
+            return None
+        text = next((b.text for b in resp.content if b.type == "text"), "")
+        try:
+            notes = json.loads(text)
+        except json.JSONDecodeError:
+            print("ai_notes: response wasn't valid JSON; keeping the previous notes.")
+            return None
+        problems = validate(notes, ctx)
+        if not problems:
+            return {**notes, "model": resp.model}
+        print(f"ai_notes: attempt {attempt} incomplete: {'; '.join(problems)} (got "
+              f"{ {k: len(v) for k, v in notes.get('meta', {}).items()} } meta bullets, "
+              f"{len(notes.get('players', []))} player notes, {len(notes.get('pods', []))} pod briefings)")
+        messages += [{"role": "assistant", "content": resp.content},
+                     {"role": "user", "content": "That answer is incomplete: " + "; ".join(problems)
+                      + ". Return the complete notes, every section filled as listed in my first message."}]
+    return None
 
 
 def main():
@@ -259,12 +277,9 @@ def main():
     if old.get("input_hash") == digest and not a.force:
         print("ai_notes: data unchanged since the last notes; skipping.")
         return
-    notes = generate(ctx)
+    notes = generate(ctx)  # already checked with validate()
     if not notes:
-        return
-    problems = validate(notes, ctx)
-    if problems:
-        print("ai_notes: not publishing these notes: " + "; ".join(problems))
+        print("ai_notes: keeping the previous notes.")
         return
     notes.update({"input_hash": digest, "session": ctx["session"],
                   "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")})
