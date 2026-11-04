@@ -36,6 +36,34 @@
       "decklists": {
         "Eric": "https://moxfield.com/decks/LcifAU7s1XWWEWpBRQYNww"
       }
+    },
+    {
+      "date": "2026-11-03",
+      "game": 1,
+      "pod": 1,
+      "seats": [
+        {
+          "player": "Alex",
+          "commander": "Tayam, Luminous Enigma"
+        },
+        {
+          "player": "Darison",
+          "commander": "Sisay, Weatherlight Captain"
+        },
+        {
+          "player": "Eric",
+          "commander": "Thrasios, Triton Hero / Tymna the Weaver"
+        },
+        {
+          "player": "Ryan",
+          "commander": "Kraum, Ludevic's Opus / Tymna the Weaver"
+        }
+      ],
+      "winner": "Darison",
+      "turn_order": true,
+      "note": "Darison won on fish and mana. Swords to Plowshares used on Tayam. Deadpool was good. Ryan had Tithe and nothing else.",
+      "source": "chat:2026-11-03-g1-p1",
+      "reported_by": "Eric"
     }
   ]
 }

@@ -115,6 +115,8 @@ def result_post(g: dict, sessions: dict, tag: dict) -> str:
     lines = [f"**Result · {nice(g['date'])}{game}{pod}**",
              f"🏆 {who(win, tag)} won on {short(win['commander'])}" if win else "🤝 Draw"]
     lines.append(" · ".join(f"{i}. {x['player']} ({short(x['commander'])})" for i, x in enumerate(g["seats"], 1)))
+    if g.get("note"):
+        lines.append(f"📝 {g['note']}")
     notes = g.get("notes") or {}
     if notes:
         lines.append("\n**How each player saw it**")
