@@ -23,7 +23,7 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-from common import ATTRIBUTION, data_dir, die, now_unix, secret
+from common import ATTRIBUTION, data_dir, die, load, now_unix, secret
 
 LIMIT = 1900  # Discord's cap is 2000 characters per message; leave headroom
 USES_TOPDECK = {"pods", "meta", "results"}
@@ -83,21 +83,24 @@ def cmd_preview(a):
 
 
 def tags() -> dict[str, str]:
-    """Player name (lower case) -> Discord user ID, from the private DISCORD_TAGS secret:
-    "Eric=123456789012345678,Alex=234567890123456789" (or the same as a JSON object).
-    Kept out of the public repo on purpose."""
+    """Player name (lower case) -> Discord user ID. Players link themselves with Discord's /iam,
+    which saves discord_id on the roster; the DISCORD_TAGS secret ("Eric=123456789012345678,
+    Alex=234567890123456789", or the same as a JSON object) fills in anyone not linked yet."""
+    out = {}
     raw = secret("DISCORD_TAGS")
-    if not raw:
-        return {}
-    try:
-        if raw.lstrip().startswith("{"):
-            pairs = json.loads(raw).items()
-        else:
-            pairs = [x.split("=", 1) for x in re.split(r"[,;\n]", raw) if "=" in x]
-    except ValueError:
-        print("DISCORD_TAGS isn't valid; posting without tags.", file=sys.stderr)
-        return {}
-    return {k.strip().lower(): str(v).strip() for k, v in pairs if str(v).strip().isdigit()}
+    if raw:
+        try:
+            if raw.lstrip().startswith("{"):
+                pairs = json.loads(raw).items()
+            else:
+                pairs = [x.split("=", 1) for x in re.split(r"[,;\n]", raw) if "=" in x]
+            out = {k.strip().lower(): str(v).strip() for k, v in pairs if str(v).strip().isdigit()}
+        except ValueError:
+            print("DISCORD_TAGS isn't valid; using the roster's Discord links only.", file=sys.stderr)
+    for p in load("roster.json").get("players", []):
+        if str(p.get("discord_id") or "").isdigit():
+            out[p["name"].lower()] = p["discord_id"]
+    return out
 
 
 def post(url: str, payload: dict, wait: bool = False) -> dict | None:

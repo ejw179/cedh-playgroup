@@ -4,6 +4,7 @@
  *   /start   plan a session (players, goal, games...) like the site's "Plan a session" form
  *   /report  report the current game of your pod: winner (or Draw) and your take
  *   /pods    show the seating of the game being played now
+ *   /iam     link your Discord account to your roster name (tags in posts, replies count as your take)
  *
  * Discord POSTs each command here (the app's Interactions Endpoint URL). The Worker
  * checks Discord's signature, answers within Discord's 3 seconds with "thinking...",
@@ -16,7 +17,7 @@
  *   DISCORD_PUBLIC_KEY  the app's public key (Developer Portal > General Information)
  *   RESULTS_URL         the Apps Script web app URL (results_url in data/config.json)
  *   PIN                 the group PIN (secret)
- *   DISCORD_TAGS        Name=DiscordUserID,... like the GitHub secret (secret)
+ *   DISCORD_TAGS        optional: Name=DiscordUserID,... for anyone who hasn't run /iam (secret)
  *   GITHUB_REPO         default ejw179/cedh-playgroup
  *   GITHUB_TOKEN        optional (secret): read data through the GitHub API instead of raw files
  *   GUILD_ID, ALLOWED_ROLE  optional: only that server / members with that role
@@ -57,7 +58,7 @@ export default {
   },
 };
 
-const COMMANDS = { start, report, pods: showPods };
+const COMMANDS = { start, report, pods: showPods, iam };
 
 // ---------- /start ----------
 
@@ -68,7 +69,7 @@ async function start(ix, env) {
   const day = o.date ? parseDate(o.date) : today();
   if (!day) return `I can't read the date "${o.date}". Use 2026-11-22 or 11/22.`;
   const [roster, saved] = await Promise.all([data(env, 'roster.json'), data(env, 'pods.json')]);
-  const ids = tagIds(env);
+  const ids = tagIds(env, roster);
   const names = [], unknown = [];
   for (const word of splitPlayers(o.players || '')) {
     const n = resolve(word, roster, ids);
@@ -107,8 +108,9 @@ async function start(ix, env) {
 
 async function report(ix, env) {
   const o = options(ix);
-  const ids = tagIds(env);
-  const [saved, games] = await Promise.all([data(env, 'pods.json'), data(env, 'games.json').catch(() => ({ games: [] }))]);
+  const [saved, games, roster] = await Promise.all([data(env, 'pods.json'),
+    data(env, 'games.json').catch(() => ({ games: [] })), data(env, 'roster.json')]);
+  const ids = tagIds(env, roster);
   const live = current(saved);
   if (!live) return 'No session is being played today. Start one with /start.';
   const { day, s } = live;
@@ -152,7 +154,25 @@ async function showPods(ix, env) {
     p.seats.map((x) => `${x.seat}. ${x.player} (${short(x.commander)})`).join(' · '))].join('\n');
 }
 
-// ---------- autocomplete: /report winner, /start player ----------
+// ---------- /iam ----------
+
+async function iam(ix, env) {
+  const o = options(ix);
+  const uid = ix.member?.user?.id || ix.user?.id;
+  const roster = await data(env, 'roster.json');
+  const name = resolve(o.player || '', roster, new Map());
+  if (!name) return `"${o.player}" isn't on the roster. Pick your name from the list.`;
+  const mine = (roster.players || []).find((p) => p.discord_id === uid);
+  if (mine?.name === name) return `You're already linked as ${name}.`;
+  const taken = (roster.players || []).find((p) => p.name === name)?.discord_id;
+  await submit(env, { type: 'tag', via: 'discord', player: name, discord_id: uid, reporter: who(ix, new Map()) });
+  return `Linked you as ${name}. From the next post on, pods tag you and your replies count as your take.` +
+    (mine ? ` (You were linked as ${mine.name}; that's removed.)` : '') +
+    (taken ? ` ${name} was linked to <@${taken}>; that's replaced. If that was wrong, they can run /iam again.` : '') +
+    ' It takes a minute or two to save.';
+}
+
+// ---------- autocomplete: /report winner, /start player, /iam player ----------
 
 async function autocomplete(ix, env) {
   const focused = (ix.data.options || []).find((x) => x.focused);
@@ -164,7 +184,7 @@ async function autocomplete(ix, env) {
     if (live) for (const p of live.s.pods) for (const x of p.seats)
       list.push({ name: `${x.player} (pod ${p.pod}, ${short(x.commander)})`.slice(0, 100), value: x.player });
     list.push({ name: 'Draw', value: 'Draw' });
-  } else if (ix.data.name === 'start' && focused.name === 'player') {
+  } else if ((ix.data.name === 'start' || ix.data.name === 'iam') && focused.name === 'player') {
     list = (await data(env, 'roster.json')).players.map((p) => ({ name: p.name, value: p.name }));
   }
   return list.filter((c) => c.name.toLowerCase().includes(typed)).slice(0, 25);
@@ -202,15 +222,21 @@ export function parseDate(text, now = new Date()) {
   return dt.toISOString().slice(0, 10);
 }
 
-/** Discord user ID -> player name, from DISCORD_TAGS ("Eric=123,Alex=456" or JSON). */
-export function tagIds(env) {
+/** Discord user ID -> player name: the roster's /iam links, then DISCORD_TAGS ("Eric=123,Alex=456" or JSON). */
+export function tagIds(env, roster) {
   const raw = (env.DISCORD_TAGS || '').trim();
   let pairs = [];
   try {
     pairs = raw.startsWith('{') ? Object.entries(JSON.parse(raw))
       : raw.split(/[,;\n]/).filter((x) => x.includes('=')).map((x) => x.split('=', 2));
   } catch (e) { pairs = []; }
-  return new Map(pairs.filter(([, v]) => /^\d+$/.test(String(v).trim())).map(([k, v]) => [String(v).trim(), k.trim()]));
+  const ids = new Map(pairs.filter(([, v]) => /^\d+$/.test(String(v).trim())).map(([k, v]) => [String(v).trim(), k.trim()]));
+  for (const p of roster?.players || []) {
+    if (!/^\d+$/.test(String(p.discord_id || ''))) continue;
+    for (const [id, n] of ids) if (n.toLowerCase() === p.name.toLowerCase()) ids.delete(id); // /iam wins
+    ids.set(String(p.discord_id), p.name);
+  }
+  return ids;
 }
 
 export function splitPlayers(text) {

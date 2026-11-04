@@ -19,3 +19,5 @@ site/
 .claude/*
 !.claude/skills/
 data/ai_notes.json
+# Cloudflare wrangler's local state
+.wrangler/

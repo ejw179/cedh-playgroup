@@ -56,6 +56,11 @@ COMMANDS = [
           "min_value": 1, "max_value": 10},
      ]},
     {"name": "pods", "description": "Show the seating of the game being played now"},
+    {"name": "iam", "description": "Link your Discord account to your name on the roster",
+     "options": [
+         {"type": STR, "name": "player", "required": True, "description": "Your name on the roster",
+          "autocomplete": True},
+     ]},
 ]
 
 

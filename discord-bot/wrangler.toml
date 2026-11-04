@@ -3,13 +3,15 @@
 name = "cedh-playgroup-discord"
 main = "worker.js"
 compatibility_date = "2026-10-01"
+workers_dev = true     # served at https://cedh-playgroup-discord.cedh-playgroup.workers.dev
+preview_urls = false   # no extra per-version URLs
 
 [vars]
 GITHUB_REPO = "ejw179/cedh-playgroup"
 # the Apps Script web app (results_url in data/config.json)
 RESULTS_URL = "https://script.google.com/macros/s/AKfycbyd9P4yfRyoe_rnZDpB8fLWOEVsGa50VNPwHPFm63pIlyTNEjVkc8Wgvm7KbRoZpFUt/exec"
 # Developer Portal > your app > General Information > Public Key
-DISCORD_PUBLIC_KEY = ""
+DISCORD_PUBLIC_KEY = "7ba628a8f1467e48ee46c61dfa827b45dfb374835212e1f235198e51cad88c01"
 # optional: only this server, and only members with this role
 # GUILD_ID = ""
 # ALLOWED_ROLE = ""

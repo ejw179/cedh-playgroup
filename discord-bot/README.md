@@ -1,6 +1,6 @@
 # Discord slash commands
 
-`/start`, `/report` and `/pods` in the group's server. A small Cloudflare Worker (`worker.js`, free plan) receives
+`/start`, `/report`, `/pods` and `/iam` in the group's server. A small Cloudflare Worker (`worker.js`, free plan) receives
 them and sends the same submissions the site's forms send to the Apps Script, so planning, recording and posting run
 through the usual import workflow. Nothing runs on your PC.
 
@@ -9,6 +9,7 @@ through the usual import workflow. Nothing runs on your PC.
 | `/start players: Eric, Darison, Alex, Jeff goal: Worst-seat practice games: 3` | Plans the session. Also: `best_decks`, `objective`, `time_limit`, `rules`, `date`, `player` / `target` (Improve, Fix), `replace` |
 | `/report winner: Alex note: …` | Records the current game of the winner's pod (pick from the list, or Draw). Your note is saved as your take; the others can still reply to the pod's post |
 | `/pods` | Shows the seating of the game being played now |
+| `/iam player: Eric` | Links your Discord account to your roster name: pod posts tag you, and your replies to a pod's post count as your take. Run it again to change it |
 
 Replies to the Worker are only visible to whoever ran the command. The pods and results post to the channel as
 before, usually a minute or two later.
@@ -25,7 +26,7 @@ before, usually a minute or two later.
    cd discord-bot
    npx wrangler login
    npx wrangler secret put PIN            # the group PIN (Apps Script property PIN)
-   npx wrangler secret put DISCORD_TAGS   # same value as the GitHub secret: Eric=123...,Alex=456...
+   npx wrangler secret put DISCORD_TAGS   # optional, for anyone who hasn't run /iam: Eric=123...,Alex=456...
    npx wrangler deploy
    ```
 
@@ -50,7 +51,10 @@ raw files.
 ## Notes
 
 - `/start` refuses a date that already has an unfinished session unless you pass `replace: True`. Players can be names
-  or @mentions (mentions need `DISCORD_TAGS`). Randoms still need a hand-built pod on the site.
+  or @mentions (for players who ran `/iam`, or are in `DISCORD_TAGS`). Randoms still need a hand-built pod on the site.
 - `/report` won't report a pod that's already in `games.json`, and the import skips a second Discord report of the
   same pod (two people reporting at once).
+- `/iam` saves `discord_id` on the player in `data/roster.json` (public, like the rest of the data; a Discord ID
+  only identifies an account). One account per player: linking a name that's taken replaces the old link. The
+  `DISCORD_TAGS` secrets are only a fallback for players who haven't linked.
 - The PIN stays in the Worker; anyone in the server (or with `ALLOWED_ROLE`) can use the commands.

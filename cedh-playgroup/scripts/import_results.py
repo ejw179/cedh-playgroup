@@ -139,13 +139,15 @@ def main():
               + ", ".join(f"{i}. {s['player']}" for i, s in enumerate(game["seats"], 1))
               + f" -> {'draw' if game['winner'] is None else game['winner'] + ' won'}")
     changed = apply_practice(subs, roster, seen)
+    linked = apply_tags(subs, roster, seen)
     if added:
         save("games.json", games)
-    if added or changed:
+    if added or changed or linked:
         save("roster.json", roster)
     for s in skipped:
         print(f"Skipped {s}", file=sys.stderr)
-    print(f"{added} new result(s) imported, {len(skipped)} skipped, {changed} practice-deck update(s).")
+    print(f"{added} new result(s) imported, {len(skipped)} skipped, {changed} practice-deck update(s), "
+          f"{linked} Discord link(s).")
 
 
 def apply_practice(subs: list[dict], roster: dict, ignored: set) -> int:
@@ -184,6 +186,30 @@ def apply_practice(subs: list[dict], roster: dict, ignored: set) -> int:
         changed += 1
         print(f"Practice decks for {pl['name']}: " + (", ".join(f"{i}. {o['commander']}" for i, o in
                                                               enumerate(out, 1)) or "cleared"))
+    return changed
+
+
+def apply_tags(subs: list[dict], roster: dict, ignored: set) -> int:
+    """Discord's /iam: link a Discord account to a roster player (pod posts tag them, their
+    replies count as their takes). One account per player and one player per account; latest wins."""
+    done = set(roster.get("applied_requests", []))
+    reqs = [s for s in subs if (s.get("payload") or {}).get("type") == "tag"
+            and s.get("id") not in done and s.get("id") not in ignored]
+    changed = 0
+    for sub in sorted(reqs, key=lambda s: s.get("received", "")):
+        roster.setdefault("applied_requests", []).append(sub["id"])
+        p = sub["payload"]
+        pl = find_player(roster, str(p.get("player", "")))
+        uid = str(p.get("discord_id") or "").strip()
+        if not pl or not uid.isdigit():
+            print(f"Skipped Discord link {sub['id']}: player {p.get('player')!r}, id {uid!r}", file=sys.stderr)
+            continue
+        for other in roster["players"]:
+            if other is not pl and other.get("discord_id") == uid:
+                del other["discord_id"]  # that account now belongs to someone else
+        pl["discord_id"] = uid
+        changed += 1
+        print(f"Discord: {pl['name']} is {uid}")
     return changed
 
 
