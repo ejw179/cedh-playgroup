@@ -64,6 +64,34 @@
       "note": "Darison won on fish and mana. Swords to Plowshares used on Tayam. Deadpool was good. Ryan had Tithe and nothing else.",
       "source": "chat:2026-11-03-g1-p1",
       "reported_by": "Eric"
+    },
+    {
+      "date": "2026-11-03",
+      "game": 2,
+      "pod": 1,
+      "seats": [
+        {
+          "player": "Ryan",
+          "commander": "Kraum, Ludevic's Opus / Tymna the Weaver"
+        },
+        {
+          "player": "Eric",
+          "commander": "Thrasios, Triton Hero / Tymna the Weaver"
+        },
+        {
+          "player": "Alex",
+          "commander": "Tayam, Luminous Enigma"
+        },
+        {
+          "player": "Darison",
+          "commander": "Sisay, Weatherlight Captain"
+        }
+      ],
+      "winner": "Darison",
+      "turn_order": true,
+      "note": "Darison won from seat 4 under Jennifer Walters. Lots of Rystic Studies. Bowman policed the board. Thrasios/Tymna couldn't convert to a win.",
+      "source": "chat:2026-11-03-g2-p1",
+      "reported_by": "Eric"
     }
   ]
 }
