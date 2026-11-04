@@ -202,6 +202,32 @@
           "commander": "Akiri, Line-Slinger / Thrasios, Triton Hero"
         }
       ]
+    },
+    {
+      "name": "Justin",
+      "topdeck_id": "MXY8yOmJrPgRULFpgZrgznE06bV2",
+      "topdeck_handle": "",
+      "topdeck_name": "Shadow [TYRNT]",
+      "decks": [
+        {
+          "commander": "Kinnan, Bonder Prodigy",
+          "primary": true
+        },
+        {
+          "commander": "Etali, Primal Conqueror",
+          "primary": false
+        }
+      ],
+      "gauntlet_pilot": false,
+      "added": "2026-11-04",
+      "practice_decks": [
+        {
+          "commander": "Kinnan, Bonder Prodigy"
+        },
+        {
+          "commander": "Etali, Primal Conqueror"
+        }
+      ]
     }
   ],
   "gauntlet_decks": [],
