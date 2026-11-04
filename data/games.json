@@ -1,43 +1,6 @@
 {
   "games": [
     {
-      "date": "2026-11-02",
-      "seats": [
-        {
-          "player": "Darison",
-          "commander": "Dihada, Binder of Wills"
-        },
-        {
-          "player": "Eric",
-          "commander": "Kraum, Ludevic's Opus / Tymna the Weaver"
-        },
-        {
-          "player": "Alex",
-          "commander": "Ishai, Ojutai Dragonspeaker / Rograkh, Son of Rohgahh"
-        },
-        {
-          "player": "Jordan",
-          "commander": "Marneus Calgar",
-          "guest": true
-        }
-      ],
-      "winner": "Jordan",
-      "turn_order": true,
-      "note": "",
-      "source": "abf712e3-6c07-4c05-972d-c83e3f6887fa",
-      "reported_by": "Eric",
-      "pod": 1,
-      "notes": {
-        "Darison": "Turn 1 Wheel, blew us out",
-        "Eric": "Breach > Tainted > Silence. Stopped Meme Bet, couldnt make blue to convert",
-        "Alex": "Wheel to 1 land.",
-        "Jordan": "Win by default."
-      },
-      "decklists": {
-        "Eric": "https://moxfield.com/decks/LcifAU7s1XWWEWpBRQYNww"
-      }
-    },
-    {
       "date": "2026-11-03",
       "game": 1,
       "pod": 1,

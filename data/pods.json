@@ -1,109 +1,5 @@
 {
   "sessions": {
-    "2026-11-02": {
-      "field_seats": [],
-      "seat_mode": "manual",
-      "pods": [
-        {
-          "pod": 1,
-          "seats": [
-            {
-              "seat": 1,
-              "player": "Darison",
-              "commander": "Dihada, Binder of Wills",
-              "gauntlet": false,
-              "decklist": "",
-              "evidence": {
-                "tournament_games": 0,
-                "practice_games": 0
-              },
-              "seat_read": "",
-              "seat_record": "",
-              "seat_vs_field": 0,
-              "seat_expected": 0,
-              "matchups_here": [],
-              "needs_practice_elsewhere": [],
-              "practice_rank": null,
-              "takeaway": null
-            },
-            {
-              "seat": 2,
-              "player": "Eric",
-              "commander": "Kraum, Ludevic's Opus / Tymna the Weaver",
-              "gauntlet": false,
-              "decklist": "https://moxfield.com/decks/LcifAU7s1XWWEWpBRQYNww",
-              "evidence": {
-                "tournament_games": 0,
-                "practice_games": 0
-              },
-              "seat_read": "",
-              "seat_record": "",
-              "seat_vs_field": 0,
-              "seat_expected": 0,
-              "matchups_here": [],
-              "needs_practice_elsewhere": [],
-              "practice_rank": null,
-              "takeaway": null
-            },
-            {
-              "seat": 3,
-              "player": "Alex",
-              "commander": "Ishai, Ojutai Dragonspeaker / Rograkh, Son of Rohgahh",
-              "gauntlet": false,
-              "decklist": "",
-              "evidence": {
-                "tournament_games": 0,
-                "practice_games": 0
-              },
-              "seat_read": "",
-              "seat_record": "",
-              "seat_vs_field": 0,
-              "seat_expected": 0,
-              "matchups_here": [],
-              "needs_practice_elsewhere": [],
-              "practice_rank": null,
-              "takeaway": null
-            },
-            {
-              "seat": 4,
-              "player": "Jordan",
-              "commander": "Marneus Calgar",
-              "gauntlet": false,
-              "guest": true,
-              "decklist": "",
-              "evidence": {
-                "tournament_games": 0,
-                "practice_games": 0
-              },
-              "seat_read": "",
-              "seat_record": "",
-              "seat_vs_field": 0,
-              "seat_expected": 0,
-              "matchups_here": [],
-              "needs_practice_elsewhere": [],
-              "practice_rank": null,
-              "takeaway": null
-            }
-          ],
-          "strength": null,
-          "meta_decks": [],
-          "repeat_pairings": [],
-          "warnings": []
-        }
-      ],
-      "bench": [],
-      "meta_label": "",
-      "analysis": false,
-      "attribution": "Tournament data from TopDeck.gg (https://topdeck.gg)",
-      "scenario": {
-        "id": "generic",
-        "label": "Build pods manually"
-      },
-      "date": "2026-11-02",
-      "saved_at": "2026-11-03T01:33:47+00:00",
-      "requested_by": "Eric",
-      "done": true
-    },
     "2026-11-03": {
       "field_seats": [
         0.23281127808424745,
@@ -177,13 +73,7 @@
               "player_strength": 0.348,
               "decklist": "",
               "practice_rank": 1,
-              "takeaway": {
-                "date": "2026-11-02",
-                "pod": 1,
-                "text": "Turn 1 Wheel, blew us out",
-                "result": "Jordan won",
-                "commander": "Dihada"
-              }
+              "takeaway": null
             },
             {
               "seat": 2,
@@ -232,13 +122,7 @@
               "player_strength": 0.278,
               "decklist": "",
               "practice_rank": 1,
-              "takeaway": {
-                "date": "2026-11-02",
-                "pod": 1,
-                "text": "Wheel to 1 land.",
-                "result": "Jordan won",
-                "commander": "Ishai/Rograkh"
-              }
+              "takeaway": null
             },
             {
               "seat": 3,
@@ -341,13 +225,7 @@
               "player_strength": 0.2,
               "decklist": "https://moxfield.com/decks/XNifAdHiMHGy2bVk5oh17A",
               "practice_rank": 2,
-              "takeaway": {
-                "date": "2026-11-02",
-                "pod": 1,
-                "text": "Breach > Tainted > Silence. Stopped Meme Bet, couldnt make blue to convert",
-                "result": "Jordan won",
-                "commander": "Kraum/Tymna"
-              }
+              "takeaway": null
             }
           ],
           "strength": 0.238,
@@ -460,13 +338,7 @@
                   "player_strength": 0.288,
                   "decklist": "",
                   "practice_rank": 1,
-                  "takeaway": {
-                    "date": "2026-11-02",
-                    "pod": 1,
-                    "text": "Wheel to 1 land.",
-                    "result": "Jordan won",
-                    "commander": "Ishai/Rograkh"
-                  }
+                  "takeaway": null
                 },
                 {
                   "seat": 2,
@@ -526,13 +398,7 @@
                   "player_strength": 0.318,
                   "decklist": "",
                   "practice_rank": 1,
-                  "takeaway": {
-                    "date": "2026-11-02",
-                    "pod": 1,
-                    "text": "Turn 1 Wheel, blew us out",
-                    "result": "Jordan won",
-                    "commander": "Dihada"
-                  }
+                  "takeaway": null
                 },
                 {
                   "seat": 3,
@@ -552,13 +418,7 @@
                   "player_strength": 0.214,
                   "decklist": "https://moxfield.com/decks/XNifAdHiMHGy2bVk5oh17A",
                   "practice_rank": 2,
-                  "takeaway": {
-                    "date": "2026-11-02",
-                    "pod": 1,
-                    "text": "Breach > Tainted > Silence. Stopped Meme Bet, couldnt make blue to convert",
-                    "result": "Jordan won",
-                    "commander": "Kraum/Tymna"
-                  }
+                  "takeaway": null
                 },
                 {
                   "seat": 4,
@@ -736,13 +596,7 @@
                   "player_strength": 0.207,
                   "decklist": "https://moxfield.com/decks/XNifAdHiMHGy2bVk5oh17A",
                   "practice_rank": 2,
-                  "takeaway": {
-                    "date": "2026-11-02",
-                    "pod": 1,
-                    "text": "Breach > Tainted > Silence. Stopped Meme Bet, couldnt make blue to convert",
-                    "result": "Jordan won",
-                    "commander": "Kraum/Tymna"
-                  }
+                  "takeaway": null
                 },
                 {
                   "seat": 3,
@@ -802,13 +656,7 @@
                   "player_strength": 0.283,
                   "decklist": "",
                   "practice_rank": 1,
-                  "takeaway": {
-                    "date": "2026-11-02",
-                    "pod": 1,
-                    "text": "Wheel to 1 land.",
-                    "result": "Jordan won",
-                    "commander": "Ishai/Rograkh"
-                  }
+                  "takeaway": null
                 },
                 {
                   "seat": 4,
@@ -860,13 +708,7 @@
                   "player_strength": 0.333,
                   "decklist": "",
                   "practice_rank": 1,
-                  "takeaway": {
-                    "date": "2026-11-02",
-                    "pod": 1,
-                    "text": "Turn 1 Wheel, blew us out",
-                    "result": "Jordan won",
-                    "commander": "Dihada"
-                  }
+                  "takeaway": null
                 }
               ],
               "strength": 0.238,
