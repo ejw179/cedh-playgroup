@@ -1,0 +1,8 @@
+{
+  "name": "cedh-playgroup-discord",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "npx wrangler deploy"
+  }
+}

@@ -117,6 +117,12 @@ def main():
         sess = sessions.get(game["date"])
         if "game" not in game and sess and sess.get("games", 1) > 1:
             game["game"] = sess.get("game", 1)  # a multi-game session: the game being played now
+        if (sub.get("payload") or {}).get("via") == "discord" and any(
+                g["date"] == game["date"] and g.get("game", 1) == game.get("game", 1)
+                and g.get("pod", 1) == game.get("pod", 1) for g in games["games"]):
+            skipped.append(f"{sub.get('id')}: that pod is already reported")  # two players ran /report
+            seen.add(sub["id"])
+            continue
         games["games"].append(game)
         seen.add(game["source"])
         added += 1

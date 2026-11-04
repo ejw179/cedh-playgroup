@@ -4,7 +4,10 @@ The site's "Plan a session" form posts {type: "session", date, players,
 seats, meta, focus} to the same Apps Script endpoint as results. This reads
 new requests, records who's playing, builds the pods with pods.py, and saves
 them so the site shows that seating with its report form. If several
-requests name the same date, the latest one wins.
+requests name the same date, the latest one wins. Discord's /start
+(discord-bot/worker.js) sends the same request, optionally with games, goal,
+time_limit, rules and first_deck, which makes it a multi-game session that
+session.py advances like one started with `session.py start`.
 
   python plan_sessions.py               # uses results_url from config.json
   python plan_sessions.py --file dump.json
@@ -114,7 +117,27 @@ def scenario_args(p: dict, day: str, names: list[str], scenario: str, roster: di
             argv += ["--deck", f"{x['player']}={x['commander']}"]
         if x["seat"]:
             argv += ["--seat", f"{x['player']}={x['seat']}"]
+    if p.get("first_deck"):  # "best decks": everyone on their #1 practice deck
+        argv.append("--first-deck")
     return argv, info, ""
+
+
+def session_fields(p: dict, argv: list[str]) -> dict:
+    """What session.py needs to run a multi-game request (from Discord's /start): later games
+    re-plan with the same pods.py arguments, minus the date it adds back itself."""
+    plan_args, skip = [], False
+    for x in argv:
+        if skip or x == "--date":
+            skip = x == "--date"
+            continue
+        plan_args.append(x)
+    try:
+        games = min(max(int(p.get("games") or 1), 1), 10)
+        limit = int(p["time_limit"]) if p.get("time_limit") else None
+    except (TypeError, ValueError):
+        games, limit = 1, None
+    return {"game": 1, "games": games, "goal": str(p.get("goal") or "")[:300], "time_limit": limit,
+            "rules": str(p.get("rules") or "")[:100], "plan_args": plan_args, "keep_decks": True, "history": []}
 
 
 def manual_args(p: dict, day: str, roster: dict):
@@ -188,7 +211,7 @@ def main():
             print(f"Skipped session request {req['id']}: pod builder stopped ({e})")
             continue
         saved["sessions"][p["date"]] = {
-            **result, "date": p["date"], "saved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            **result, **session_fields(p, argv), "date": p["date"], "saved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "requested_by": str(p.get("reporter") or "")[:60],
             "scenario": result.get("scenario") if "scenario" in info else
             {"id": "custom", "label": "Custom", "seats": info["seats"], "meta": info["meta"], "focus": info["focus"]},

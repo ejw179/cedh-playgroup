@@ -20,6 +20,7 @@ and posting to the group's Discord.
 - `data/`: the group's data (roster, practice decks, games and per-player notes, sessions, saved pods,
   settings). Public: it feeds the site.
 - `apps-script/`: the Google Apps Script that receives "Report result" submissions (setup in its README)
+- `discord-bot/`: the `/start`, `/report` and `/pods` Discord slash commands, a Cloudflare Worker that sends the same submissions as the site (setup in its README)
 - `cedh-playgroup/evals/`: test cases (prompt, expected outcome, graders, synthetic data)
 - `.github/workflows/site.yml`: nightly sync, build, deploy to GitHub Pages
 - `.github/workflows/import.yml`: started by each site submission, and every 5 minutes while a session is being played (10-minute schedule as fallback): import results from the site and from Discord replies, plan sessions and each session's next game, post them to Discord with tags, rebuild
