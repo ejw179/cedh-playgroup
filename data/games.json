@@ -83,6 +83,37 @@
       "note": "Ryan won off a questionable push under Voice. Thrasios/Tymna couldn't convert; Brewmaster ETB trigger.",
       "source": "chat:2026-11-03-g3-p1",
       "reported_by": "Eric"
+    },
+    {
+      "date": "2026-11-04",
+      "seats": [
+        {
+          "player": "Eric",
+          "commander": "Kraum, Ludevic's Opus / Tymna the Weaver"
+        },
+        {
+          "player": "Ryan",
+          "commander": "Kraum, Ludevic's Opus / Tymna the Weaver"
+        },
+        {
+          "player": "Darison",
+          "commander": "Sisay, Weatherlight Captain"
+        },
+        {
+          "player": "Justin",
+          "commander": "Kinnan, Bonder Prodigy"
+        }
+      ],
+      "winner": "Eric",
+      "turn_order": true,
+      "note": "",
+      "source": "8afcc5bf-7fff-4539-8cbb-501ef7a0a5a2",
+      "reported_by": "Eric",
+      "pod": 1,
+      "game": 1,
+      "decklists": {
+        "Eric": "https://moxfield.com/decks/LcifAU7s1XWWEWpBRQYNww"
+      }
     }
   ]
 }
